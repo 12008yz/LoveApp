@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Local default: sqlite. For Docker Postgres set provider = "postgresql"
+  // and DATABASE_URL=postgresql://love:love@localhost:5432/loveapp?schema=public
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime @default(now())
+
+  membership         CoupleMember?
+  messages           Message[]
+  diaryEntries       DiaryEntry[]
+  events             Event[]
+  letters            Letter[]           @relation("LetterAuthor")
+  mediaItems         MediaItem[]
+  timelineEvents     TimelineEvent[]
+  wishlistItems      WishlistItem[]
+  moodPings          MoodPing[]
+  careItems          CareItem[]
+  moodCheckIns       MoodCheckIn[]
+  gameSessionsAsBoy  GameSession[]      @relation("GameBoy")
+  gameSessionsAsGirl GameSession[]      @relation("GameGirl")
+  pushSubscriptions  PushSubscription[]
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Couple {
+  id         String    @id @default(cuid())
+  inviteCode String    @unique
+  status     String    @default("waiting") // waiting | active
+  startedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  members        CoupleMember[]
+  messages       Message[]
+  diaryEntries   DiaryEntry[]
+  events         Event[]
+  letters        Letter[]
+  mediaItems     MediaItem[]
+  places         Place[]
+  timelineEvents TimelineEvent[]
+  wishlistItems  WishlistItem[]
+  moodPings      MoodPing[]
+  careItems      CareItem[]
+  moodCheckIns   MoodCheckIn[]
+  gameSessions   GameSession[]
+}
+
+model CoupleMember {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  coupleId   String
+  genderRole String // boy | girl
+  joinedAt   DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  @@unique([coupleId, genderRole])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, createdAt])
+}
+
+model DiaryEntry {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, createdAt])
+}
+
+model Event {
+  id         String    @id @default(cuid())
+  coupleId   String
+  authorId   String
+  title      String
+  notes      String?
+  occursAt   DateTime
+  remindAt   DateTime?
+  remindedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, occursAt])
+  @@index([remindAt, remindedAt])
+}
+
+model Letter {
+  id         String   @id @default(cuid())
+  coupleId   String
+  authorId   String
+  title      String
+  body       String
+  unlockAt   DateTime
+  openedAt   DateTime?
+  createdAt  DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation("LetterAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, unlockAt])
+}
+
+model MediaItem {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  caption   String?
+  filePath  String
+  placeId   String?
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  place  Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  @@index([coupleId, createdAt])
+}
+
+model Place {
+  id        String   @id @default(cuid())
+  coupleId  String
+  name      String
+  lat       Float
+  lng       Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  couple Couple      @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  media  MediaItem[]
+
+  @@index([coupleId])
+}
+
+model TimelineEvent {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  title     String
+  body      String?
+  happenedAt DateTime
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, happenedAt])
+}
+
+model WishlistItem {
+  id          String   @id @default(cuid())
+  coupleId    String
+  authorId    String
+  title       String
+  url         String?
+  notes       String?
+  forPartner  Boolean  @default(true)
+  fulfilled   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, createdAt])
+}
+
+model MoodPing {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  kind      String // miss_you | busy | hug | love | tired | happy
+  note      String?
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, createdAt])
+}
+
+model CareItem {
+  id         String   @id @default(cuid())
+  coupleId   String
+  authorId   String
+  kind       String // joy | annoyance
+  body       String
+  visibility String  @default("private") // private | shared
+  createdAt  DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, kind])
+}
+
+model MoodCheckIn {
+  id        String   @id @default(cuid())
+  coupleId  String
+  authorId  String
+  score     Int // 1-5
+  note      String?
+  day       String // YYYY-MM-DD
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([authorId, day])
+  @@index([coupleId, day])
+}
+
+model GameSession {
+  id           String   @id @default(cuid())
+  coupleId     String
+  type         String // tictactoe | words
+  status       String   @default("active") // active | finished
+  stateJson    String
+  boyUserId    String?
+  girlUserId   String?
+  winnerId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  boy    User?  @relation("GameBoy", fields: [boyUserId], references: [id], onDelete: SetNull)
+  girl  User?  @relation("GameGirl", fields: [girlUserId], references: [id], onDelete: SetNull)
+
+  @@index([coupleId, type])
+}

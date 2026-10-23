@@ -1,0 +1,67 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireCoupleApi } from "@/lib/session";
+import { saveImage } from "@/lib/storage";
+
+export async function GET() {
+  const authResult = await requireCoupleApi();
+  if ("error" in authResult) return authResult.error;
+
+  const items = await prisma.mediaItem.findMany({
+    where: { coupleId: authResult.couple.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { id: true, displayName: true } },
+      place: true,
+    },
+  });
+
+  return NextResponse.json({ items });
+}
+
+export async function POST(req: Request) {
+  const authResult = await requireCoupleApi();
+  if ("error" in authResult) return authResult.error;
+
+  const form = await req.formData();
+  const file = form.get("file");
+  const caption = String(form.get("caption") || "").slice(0, 300);
+  const placeId = String(form.get("placeId") || "") || null;
+
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "Нужен файл" }, { status: 400 });
+  }
+  if (!file.type.startsWith("image/")) {
+    return NextResponse.json({ error: "Только изображения" }, { status: 400 });
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: "Максимум 5 МБ" }, { status: 400 });
+  }
+
+  if (placeId) {
+    const place = await prisma.place.findFirst({
+      where: { id: placeId, coupleId: authResult.couple.id },
+    });
+    if (!place) {
+      return NextResponse.json({ error: "Место не найдено" }, { status: 400 });
+    }
+  }
+
+  const filePath = await saveImage(file);
+
+  const item = await prisma.mediaItem.create({
+    data: {
+      coupleId: authResult.couple.id,
+      authorId: authResult.user.id,
+      caption: caption || null,
+      filePath,
+      placeId,
+    },
+    include: {
+      author: { select: { id: true, displayName: true } },
+      place: true,
+    },
+  });
+
+  return NextResponse.json({ item }, { status: 201 });
+}
