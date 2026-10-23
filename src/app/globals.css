@@ -49,15 +49,33 @@ select {
   overflow: hidden;
 }
 
-.landing::before {
-  content: "";
+.landing--cozy {
+  place-items: end center;
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+}
+
+.landing__art {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(120deg, rgba(180, 35, 74, 0.18), transparent 40%),
-    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23b4234a' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
   pointer-events: none;
-  animation: drift 18s ease-in-out infinite alternate;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
+.landing__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(28, 20, 18, 0.15) 0%, rgba(28, 20, 18, 0.55) 55%, rgba(28, 20, 18, 0.72) 100%),
+    radial-gradient(800px 400px at 50% 100%, rgba(232, 160, 90, 0.2), transparent 60%);
+}
+
+.landing::before {
+  content: none;
 }
 
 @keyframes drift {
@@ -74,6 +92,11 @@ select {
   z-index: 1;
   max-width: 720px;
   text-align: center;
+  padding: 1.25rem 1rem 0.5rem;
+}
+
+.landing--cozy .hero-copy {
+  color: #fffaf6;
 }
 
 .brand-hero {
@@ -86,6 +109,11 @@ select {
   animation: rise 0.9s ease both;
 }
 
+.landing--cozy .brand-hero {
+  color: #fff8f2;
+  text-shadow: 0 8px 28px rgba(28, 20, 18, 0.35);
+}
+
 .hero-copy h2 {
   font-family: var(--font-display);
   font-weight: 500;
@@ -94,12 +122,20 @@ select {
   animation: rise 1s ease 0.08s both;
 }
 
+.landing--cozy .hero-copy h2 {
+  color: #fff3ea;
+}
+
 .hero-copy p {
   color: var(--ink-soft);
   font-size: 1.05rem;
   margin: 0 auto 1.75rem;
   max-width: 34rem;
   animation: rise 1.05s ease 0.14s both;
+}
+
+.landing--cozy .hero-copy p {
+  color: rgba(255, 248, 242, 0.88);
 }
 
 @keyframes rise {
@@ -165,6 +201,45 @@ select {
   display: grid;
   place-items: center;
   padding: 2rem 1rem;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.auth-shell::before,
+.onboard-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    center / cover no-repeat url("/art/auth-window.jpg"),
+    linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+}
+
+.onboard-shell--waiting::before {
+  background:
+    center / cover no-repeat url("/art/waiting-seat.jpg"),
+    linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+}
+
+.auth-shell::after,
+.onboard-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 246, 239, 0.55) 0%,
+    rgba(255, 246, 239, 0.78) 45%,
+    rgba(255, 246, 239, 0.9) 100%
+  );
+}
+
+.auth-shell > *,
+.onboard-shell > * {
+  animation: rise 0.7s var(--ease) both;
 }
 
 .panel {
@@ -669,5 +744,125 @@ select {
   }
   100% {
     background-position: -100% 0;
+  }
+}
+
+/* —— Cozy home room —— */
+.home-hero--compact {
+  margin-bottom: 0.75rem;
+}
+
+.home-hero--compact h1 {
+  font-size: clamp(1.6rem, 4vw, 2rem);
+}
+
+.home-room {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.home-room__tip {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--lamp) 18%, var(--paper));
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.home-room__tip-dismiss {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--rose-deep);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+}
+
+.home-room__stage {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background: var(--paper-deep);
+  /* Match art exactly (864×1152) — no cover-crop shifting hotspots */
+  aspect-ratio: 864 / 1152;
+}
+
+.home-room__art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
+.home-room__hotspot {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: #fffaf6;
+  background: transparent;
+  box-sizing: border-box;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-room__hotspot:hover,
+.home-room__hotspot:focus-visible {
+  transform: scale(1.02);
+  background: rgba(28, 20, 18, 0.18);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lamp) 75%, white);
+  outline: none;
+}
+
+.home-room__hotspot:active {
+  transform: scale(0.98);
+}
+
+.home-room__hotspot-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(28, 20, 18, 0.62);
+  backdrop-filter: blur(6px);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing__art,
+  .auth-shell > *,
+  .onboard-shell > *,
+  .home-room__hotspot {
+    animation: none !important;
+    transition: none !important;
   }
 }

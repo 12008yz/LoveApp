@@ -8,7 +8,10 @@ export default async function LandingPage() {
   if (session?.user) redirect("/home");
 
   return (
-    <section className="landing">
+    <section className="landing landing--cozy">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="landing__art" src="/art/landing-room.jpg" alt="" width={768} height={1024} />
+      <div className="landing__scrim" aria-hidden />
       <div className="hero-copy">
         <p className="brand-hero">LoveApp</p>
         <h2>Ваш общий домик</h2>

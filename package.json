@@ -13,7 +13,9 @@
     "db:studio": "prisma studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "setup": "docker compose up -d && prisma db push"
+    "setup": "docker compose up -d && prisma db push",
+    "tunnel": "lt --port 3000 --print-requests",
+    "dev:public": "npm run tunnel"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -40,6 +42,7 @@
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "localtunnel": "^2.0.2",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5",

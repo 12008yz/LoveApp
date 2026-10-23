@@ -12,6 +12,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/uploads") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
+    pathname.startsWith("/art") ||
     pathname === "/manifest.webmanifest" ||
     pathname === "/sw.js"
   ) {

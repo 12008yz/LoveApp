@@ -9,6 +9,20 @@ export function OnboardingClient() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  async function startDemo() {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/couple/demo", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(data.error || "Не удалось открыть демо");
+      return;
+    }
+    router.push("/home");
+    router.refresh();
+  }
+
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -62,6 +76,18 @@ export function OnboardingClient() {
         <h1>Соберите пару</h1>
         <p className="muted">
           LoveApp — для мальчика и девочки. Один создаёт домик, второй входит по коду.
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ width: "100%", marginBottom: "1rem" }}
+          onClick={() => void startDemo()}
+          disabled={loading}
+        >
+          {loading ? "Открываем…" : "Демо без ожидания партнёра"}
+        </button>
+        <p className="muted" style={{ fontSize: "0.85rem", marginTop: "-0.5rem", marginBottom: "1rem" }}>
+          Сразу в домик с виртуальным партнёром — удобно показать приложение.
         </p>
         <div className="cta-row" style={{ justifyContent: "flex-start", marginBottom: "1rem" }}>
           <button

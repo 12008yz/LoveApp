@@ -12,6 +12,8 @@ export function WaitingClient({
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoError, setDemoError] = useState("");
   const inviteUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     return `${window.location.origin}/join/${inviteCode}`;
@@ -36,8 +38,22 @@ export function WaitingClient({
     setTimeout(() => setCopied(null), 1500);
   }
 
+  async function continueDemo() {
+    setDemoBusy(true);
+    setDemoError("");
+    const res = await fetch("/api/couple/demo", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setDemoBusy(false);
+    if (!res.ok) {
+      setDemoError(data.error || "Не удалось открыть демо");
+      return;
+    }
+    router.push("/home");
+    router.refresh();
+  }
+
   return (
-    <div className="onboard-shell">
+    <div className="onboard-shell onboard-shell--waiting">
       <div className="panel">
         <h1>Ждём вторую половинку</h1>
         <p className="muted">
@@ -55,12 +71,22 @@ export function WaitingClient({
             {inviteCode}
           </div>
         </div>
+        {demoError ? <p className="error-text">{demoError}</p> : null}
         <div className="stack">
           <button type="button" className="btn btn-primary" onClick={() => copy("link")} style={{ width: "100%" }}>
             {copied === "link" ? "Ссылка скопирована" : "Скопировать ссылку"}
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => copy("code")} style={{ width: "100%" }}>
             {copied === "code" ? "Код скопирован" : "Скопировать код"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void continueDemo()}
+            disabled={demoBusy}
+            style={{ width: "100%" }}
+          >
+            {demoBusy ? "Открываем…" : "Демо: войти без партнёра"}
           </button>
         </div>
       </div>
