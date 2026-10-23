@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Layero free image has no libssl — use static binary engine (not .so library)
+  engineType    = "binary"
+  binaryTargets = ["native", "linux-static-x64"]
 }
 
 datasource db {

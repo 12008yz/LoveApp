@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
       static: 180,
     },
   },
+  // Keep SQLite schema/db next to the standalone server on Layero
+  outputFileTracingIncludes: {
+    "/*": ["./prisma/**/*"],
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {

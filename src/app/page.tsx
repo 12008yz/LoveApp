@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui";
+import { DemoEnterButton } from "@/components/demo-enter-button";
 
 export default async function LandingPage() {
   const session = await auth();
@@ -17,11 +18,12 @@ export default async function LandingPage() {
         <h2>Ваш общий домик</h2>
         <p>Чат, дневник и воспоминания — только для вас двоих, удобно с телефона.</p>
         <div className="cta-row">
+          <DemoEnterButton variant="primary" />
           <Link href="/register">
-            <Button>Создать аккаунт</Button>
+            <Button variant="secondary">Создать аккаунт</Button>
           </Link>
           <Link href="/login">
-            <Button variant="secondary">Войти</Button>
+            <Button variant="ghost">Войти</Button>
           </Link>
         </div>
       </div>
