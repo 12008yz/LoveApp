@@ -1,5 +1,5 @@
-const CACHE = "loveapp-v2";
-const ASSETS = ["/", "/manifest.webmanifest"];
+const CACHE = "loveapp-v3";
+const ASSETS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -17,13 +17,31 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+
+  // Never cache HTML navigations — always network (avoids stale shells / reload loops)
+  if (request.mode === "navigate" || request.destination === "document") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Cache only static asset-like requests
+  const isStatic =
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname === "/manifest.webmanifest" ||
+    url.pathname === "/sw.js";
+
+  if (!isStatic) return;
+
   event.respondWith(
     caches.match(request).then((cached) => {
       const fetched = fetch(request)
         .then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
+          if (response.ok) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
           }

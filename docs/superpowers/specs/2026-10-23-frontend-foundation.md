@@ -1,25 +1,27 @@
-# Frontend foundation
+# Frontend foundation + mobile first
 
 ## Goal
 
-Prepare a reusable UI layer for LoveApp redesign without rewriting all feature pages yet.
+Reusable UI layer and mobile-first shell for LoveApp.
 
-## Stack choices
+## Decisions
 
-- CSS variables as source of truth (tokens)
-- Small React primitives in `src/components/ui/`
-- Existing page CSS kept for compatibility; new work prefers UI kit
-- Dev gallery at `/dev/ui` (404 in production)
+- **Mobile first** — phone layout is the default; desktop enhances.
+- Tokens in `src/styles/tokens.css`
+- UI kit in `src/components/ui/`
+- Dev gallery `/dev/ui` (dev only)
+
+## Shell
+
+- Sticky top bar (brand + couple names)
+- Fixed **bottom nav**: Дом, Чат, Дневник, Альбом, Ещё
+- «Ещё» = bottom sheet with secondary routes + logout
+- Safe-area padding for notched phones
 
 ## Visual direction
 
-Warm “home for two”: rose / ink / paper. Display: Source Serif 4. Body: Manrope.  
-Avoid: purple glow themes, cream+terracotta cliché, generic Inter/system stacks.
+Warm rose / ink / paper. Source Serif 4 + Manrope. No purple glow theme.
 
-## Components (v1)
+## Next
 
-Button, Input, Textarea, Select, Field, Panel, EmptyState, Badge, ErrorText, Stack
-
-## Next after foundation
-
-Redesign landing → shell → chat using the kit.
+Migrate remaining feature screens onto UI kit; polish landing/auth for mobile.

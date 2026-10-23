@@ -50,4 +50,10 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 150ms;
   --dur: 220ms;
+
+  /* Mobile shell */
+  --topbar-h: 3.5rem;
+  --bottom-nav-h: 4.25rem;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bp-md: 768px;
 }

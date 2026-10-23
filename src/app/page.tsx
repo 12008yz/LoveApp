@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui";
 
 export default async function LandingPage() {
   const session = await auth();
@@ -10,17 +11,14 @@ export default async function LandingPage() {
     <section className="landing">
       <div className="hero-copy">
         <p className="brand-hero">LoveApp</p>
-        <h2>Ваш общий домик в сети</h2>
-        <p>
-          Чат, дневник, письма на потом, альбом мест и маленькие игры — всё только для
-          вас двоих.
-        </p>
+        <h2>Ваш общий домик</h2>
+        <p>Чат, дневник и воспоминания — только для вас двоих, удобно с телефона.</p>
         <div className="cta-row">
-          <Link href="/register" className="btn btn-primary">
-            Создать аккаунт
+          <Link href="/register">
+            <Button>Создать аккаунт</Button>
           </Link>
-          <Link href="/login" className="btn btn-secondary">
-            Войти
+          <Link href="/login">
+            <Button variant="secondary">Войти</Button>
           </Link>
         </div>
       </div>

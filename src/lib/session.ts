@@ -1,14 +1,15 @@
+import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   return session.user;
-}
+});
 
-export async function getMembership(userId: string) {
+export const getMembership = cache(async (userId: string) => {
   return prisma.coupleMember.findUnique({
     where: { userId },
     include: {
@@ -22,7 +23,7 @@ export async function getMembership(userId: string) {
       user: { select: { id: true, displayName: true, email: true } },
     },
   });
-}
+});
 
 export async function requireCouple() {
   const user = await requireUser();

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui";
 
 type Message = {
   id: string;
@@ -26,7 +27,7 @@ export function ChatClient() {
       const json = await res.json();
       if (!cancelled) setMessages(json.messages || []);
     }
-    load();
+    void load();
 
     const es = new EventSource("/api/messages/stream");
     es.onmessage = (ev) => {
@@ -68,19 +69,31 @@ export function ChatClient() {
     });
     const json = await res.json();
     if (json.message) {
-      setMessages((prev) => (prev.some((m) => m.id === json.message.id) ? prev : [...prev, json.message]));
+      setMessages((prev) =>
+        prev.some((m) => m.id === json.message.id) ? prev : [...prev, json.message],
+      );
     }
   }
 
   return (
     <div className="soft-panel chat-layout">
       <div className="chat-log">
+        {messages.length === 0 ? (
+          <p className="ui-muted" style={{ textAlign: "center", margin: "2rem 0" }}>
+            Напишите первое сообщение любимому человеку.
+          </p>
+        ) : null}
         {messages.map((m) => (
           <div key={m.id} className={m.authorId === me ? "bubble mine" : "bubble"}>
             <div className="meta">{m.author.displayName}</div>
             <div>{m.body}</div>
             <div className="meta">
-              {new Date(m.createdAt).toLocaleString("ru-RU")}
+              {new Date(m.createdAt).toLocaleString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+                day: "numeric",
+                month: "short",
+              })}
               {m.authorId === me && m.readAt ? " · прочитано" : ""}
             </div>
           </div>
@@ -91,12 +104,14 @@ export function ChatClient() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Напишите что-нибудь…"
+          placeholder="Сообщение…"
           maxLength={4000}
+          enterKeyHint="send"
+          autoComplete="off"
         />
-        <button className="btn btn-primary" type="submit">
-          Отправить
-        </button>
+        <Button type="submit" size="sm" disabled={!text.trim()}>
+          →
+        </Button>
       </form>
     </div>
   );

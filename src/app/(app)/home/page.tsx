@@ -38,7 +38,7 @@ export default async function HomePage() {
       <PushPrompt />
       <div className="grid-2">
         {tiles.map((tile) => (
-          <Link key={tile.href} href={tile.href} className="tile-link">
+          <Link key={tile.href} href={tile.href} prefetch={false} className="tile-link">
             <strong>{tile.title}</strong>
             <span>{tile.desc}</span>
           </Link>
