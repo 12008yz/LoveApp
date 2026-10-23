@@ -20,6 +20,13 @@ npm test
 
 Покрыты: логика игр, инвайт-коды, маскировка писем, cron-auth, режим storage, изоляция пар в БД.
 
+## Frontend foundation
+
+- Токены: `src/styles/tokens.css`
+- UI-kit: `src/components/ui/`
+- Dev gallery (только `next dev`): [http://localhost:3000/dev/ui](http://localhost:3000/dev/ui)
+- Spec: `docs/superpowers/specs/2026-10-23-frontend-foundation.md`
+
 ## Быстрый старт (без Docker)
 
 ```bash

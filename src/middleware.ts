@@ -23,8 +23,13 @@ export async function middleware(req: NextRequest) {
     secret: process.env.AUTH_SECRET,
   });
 
+  const isDevGallery =
+    process.env.NODE_ENV !== "production" && pathname.startsWith("/dev/");
+
   const isPublic =
-    publicPaths.includes(pathname) || pathname.startsWith("/join/");
+    publicPaths.includes(pathname) ||
+    pathname.startsWith("/join/") ||
+    isDevGallery;
 
   if (!token && !isPublic) {
     if (pathname.startsWith("/api/")) {

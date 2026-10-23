@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
+import { Button, ErrorText, Field, Input, Panel } from "@/components/ui";
 
 function RegisterForm() {
   const router = useRouter();
@@ -58,39 +59,37 @@ function RegisterForm() {
 
   return (
     <div className="auth-shell">
-      <form className="panel" onSubmit={onSubmit}>
-        <h1>Регистрация</h1>
-        <p className="muted">
-          {nextPath.startsWith("/join/")
-            ? "Создайте аккаунт, чтобы принять приглашение."
-            : "Создайте аккаунт, затем пригласите партнёра."}
-        </p>
-        {error ? <p className="error-text">{error}</p> : null}
-        <div className="field">
-          <label htmlFor="displayName">Имя</label>
-          <input id="displayName" name="displayName" required maxLength={40} />
-        </div>
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" required autoComplete="email" />
-        </div>
-        <div className="field">
-          <label htmlFor="password">Пароль</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={6}
-            autoComplete="new-password"
-          />
-        </div>
-        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
-          {loading ? "Создаём…" : "Создать аккаунт"}
-        </button>
-        <p className="muted" style={{ marginTop: "1rem", marginBottom: 0 }}>
-          Уже есть аккаунт? <Link href={loginHref}>Войти</Link>
-        </p>
+      <form onSubmit={onSubmit}>
+        <Panel title="Регистрация" narrow>
+          <p className="ui-muted" style={{ marginTop: 0, marginBottom: "1.25rem" }}>
+            {nextPath.startsWith("/join/")
+              ? "Создайте аккаунт, чтобы принять приглашение."
+              : "Создайте аккаунт, затем пригласите партнёра."}
+          </p>
+          {error ? <ErrorText>{error}</ErrorText> : null}
+          <Field label="Имя" htmlFor="displayName">
+            <Input id="displayName" name="displayName" required maxLength={40} />
+          </Field>
+          <Field label="Email" htmlFor="email">
+            <Input id="email" name="email" type="email" required autoComplete="email" />
+          </Field>
+          <Field label="Пароль" htmlFor="password">
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="new-password"
+            />
+          </Field>
+          <Button type="submit" block disabled={loading}>
+            {loading ? "Создаём…" : "Создать аккаунт"}
+          </Button>
+          <p className="ui-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>
+            Уже есть аккаунт? <Link href={loginHref}>Войти</Link>
+          </p>
+        </Panel>
       </form>
     </div>
   );

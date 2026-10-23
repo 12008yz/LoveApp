@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
+import { Button, ErrorText, Field, Input, Panel } from "@/components/ui";
 
 function LoginForm() {
   const router = useRouter();
@@ -34,31 +35,32 @@ function LoginForm() {
 
   return (
     <div className="auth-shell">
-      <form className="panel" onSubmit={onSubmit}>
-        <h1>Вход</h1>
-        <p className="muted">С возвращением в ваш домик.</p>
-        {error ? <p className="error-text">{error}</p> : null}
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" required autoComplete="email" />
-        </div>
-        <div className="field">
-          <label htmlFor="password">Пароль</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={6}
-            autoComplete="current-password"
-          />
-        </div>
-        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
-          {loading ? "Входим…" : "Войти"}
-        </button>
-        <p className="muted" style={{ marginTop: "1rem", marginBottom: 0 }}>
-          Нет аккаунта? <Link href="/register">Зарегистрироваться</Link>
-        </p>
+      <form onSubmit={onSubmit}>
+        <Panel title="Вход" narrow>
+          <p className="ui-muted" style={{ marginTop: 0, marginBottom: "1.25rem" }}>
+            С возвращением в ваш домик.
+          </p>
+          {error ? <ErrorText>{error}</ErrorText> : null}
+          <Field label="Email" htmlFor="email">
+            <Input id="email" name="email" type="email" required autoComplete="email" />
+          </Field>
+          <Field label="Пароль" htmlFor="password">
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="current-password"
+            />
+          </Field>
+          <Button type="submit" block disabled={loading}>
+            {loading ? "Входим…" : "Войти"}
+          </Button>
+          <p className="ui-muted" style={{ marginTop: "1rem", marginBottom: 0 }}>
+            Нет аккаунта? <Link href="/register">Зарегистрироваться</Link>
+          </p>
+        </Panel>
       </form>
     </div>
   );

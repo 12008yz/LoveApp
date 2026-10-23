@@ -1,0 +1,53 @@
+:root {
+  /* Color */
+  --ink: #1c1412;
+  --ink-soft: #4a3a36;
+  --ink-faint: rgba(28, 20, 18, 0.55);
+  --paper: #fff7f2;
+  --paper-deep: #f3e4db;
+  --paper-glass: rgba(255, 250, 247, 0.88);
+  --rose: #b4234a;
+  --rose-deep: #7a1833;
+  --rose-soft: #ffd6e0;
+  --rose-mist: rgba(180, 35, 74, 0.1);
+  --mint: #d8f3e4;
+  --line: rgba(28, 20, 18, 0.12);
+  --danger: #7a1833;
+  --focus: rgba(180, 35, 74, 0.35);
+
+  /* Elevation */
+  --shadow: 0 18px 50px rgba(74, 24, 40, 0.12);
+  --shadow-soft: 0 8px 24px rgba(74, 24, 40, 0.06);
+
+  /* Shape */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --radius: var(--radius-lg);
+
+  /* Type */
+  --font-display: var(--font-fraunces), "Source Serif 4", Georgia, serif;
+  --font-body: var(--font-manrope), Manrope, system-ui, sans-serif;
+  --text-xs: 0.82rem;
+  --text-sm: 0.9rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: clamp(1.8rem, 3vw, 2.4rem);
+  --text-hero: clamp(3.5rem, 12vw, 7rem);
+
+  /* Space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+}
