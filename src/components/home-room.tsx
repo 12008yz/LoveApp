@@ -22,7 +22,7 @@ export function HomeRoom() {
     <div className="home-room">
       {tip ? (
         <p className="home-room__tip" role="status">
-          Нажми на рамку, блокнот или лампу — это ваши разделы.
+          Нажми на предметы: альбом, созвездие, джойстик, дневник, письма…
           <button type="button" className="home-room__tip-dismiss" onClick={() => setTip(false)}>
             Понятно
           </button>

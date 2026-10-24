@@ -18,9 +18,11 @@ export async function GET() {
 
 const schema = z.object({
   name: z.string().min(1).max(120),
+  address: z.string().max(300).optional(),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   notes: z.string().max(1000).optional(),
+  visitAt: z.string().datetime().optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,16 +31,23 @@ export async function POST(req: Request) {
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Проверьте координаты" }, { status: 400 });
+    return NextResponse.json({ error: "Проверьте место и время" }, { status: 400 });
+  }
+
+  const visitAt = parsed.data.visitAt ? new Date(parsed.data.visitAt) : null;
+  if (visitAt && Number.isNaN(visitAt.getTime())) {
+    return NextResponse.json({ error: "Некорректная дата" }, { status: 400 });
   }
 
   const place = await prisma.place.create({
     data: {
       coupleId: authResult.couple.id,
       name: parsed.data.name.trim(),
+      address: parsed.data.address?.trim() || null,
       lat: parsed.data.lat,
       lng: parsed.data.lng,
       notes: parsed.data.notes?.trim() || null,
+      visitAt,
     },
   });
 

@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   const form = await req.formData();
   const file = form.get("file");
-  const caption = String(form.get("caption") || "").slice(0, 300);
+  const caption = String(form.get("caption") || "").trim().slice(0, 300);
   const placeId = String(form.get("placeId") || "") || null;
 
   if (!(file instanceof File)) {
@@ -36,6 +36,9 @@ export async function POST(req: Request) {
   }
   if (file.size > 5 * 1024 * 1024) {
     return NextResponse.json({ error: "Максимум 5 МБ" }, { status: 400 });
+  }
+  if (!caption) {
+    return NextResponse.json({ error: "Добавьте подпись к фото" }, { status: 400 });
   }
 
   if (placeId) {
@@ -53,7 +56,7 @@ export async function POST(req: Request) {
     data: {
       coupleId: authResult.couple.id,
       authorId: authResult.user.id,
-      caption: caption || null,
+      caption,
       filePath,
       placeId,
     },

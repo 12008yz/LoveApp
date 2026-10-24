@@ -9,11 +9,23 @@ export async function GET() {
 
   const entries = await prisma.diaryEntry.findMany({
     where: { coupleId: authResult.couple.id },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     include: { author: { select: { id: true, displayName: true } } },
   });
 
-  return NextResponse.json({ entries });
+  const roleByUser = Object.fromEntries(
+    authResult.couple.members.map((m) => [m.userId, m.genderRole]),
+  );
+
+  return NextResponse.json({
+    entries: entries.map((entry) => ({
+      ...entry,
+      author: {
+        ...entry.author,
+        genderRole: roleByUser[entry.authorId] || "boy",
+      },
+    })),
+  });
 }
 
 const schema = z.object({
@@ -40,5 +52,18 @@ export async function POST(req: Request) {
     include: { author: { select: { id: true, displayName: true } } },
   });
 
-  return NextResponse.json({ entry }, { status: 201 });
+  const me = authResult.couple.members.find((m) => m.userId === authResult.user.id);
+
+  return NextResponse.json(
+    {
+      entry: {
+        ...entry,
+        author: {
+          ...entry.author,
+          genderRole: me?.genderRole || "boy",
+        },
+      },
+    },
+    { status: 201 },
+  );
 }

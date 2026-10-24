@@ -7,7 +7,7 @@ type Entry = {
   title: string;
   body: string;
   createdAt: string;
-  author: { displayName: string };
+  author: { id: string; displayName: string; genderRole?: string };
 };
 
 export function DiaryClient() {
@@ -21,7 +21,7 @@ export function DiaryClient() {
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -42,7 +42,7 @@ export function DiaryClient() {
       return;
     }
     e.currentTarget.reset();
-    setEntries((prev) => [json.entry, ...prev]);
+    setEntries((prev) => [...prev, json.entry]);
   }
 
   async function remove(id: string) {
@@ -55,31 +55,39 @@ export function DiaryClient() {
       <form className="soft-panel" onSubmit={onSubmit}>
         {error ? <p className="error-text">{error}</p> : null}
         <div className="field">
-          <label htmlFor="title">Заголовок</label>
+          <label htmlFor="title">Тема (коротко)</label>
           <input id="title" name="title" required maxLength={120} />
         </div>
         <div className="field">
-          <label htmlFor="body">Запись</label>
+          <label htmlFor="body">Сообщение в дневник</label>
           <textarea id="body" name="body" required />
         </div>
         <button className="btn btn-primary" type="submit">
-          Сохранить
+          Отправить
         </button>
       </form>
-      <div className="soft-panel">
-        {entries.length === 0 ? <p className="muted">Пока пусто — напишите первую запись.</p> : null}
-        {entries.map((entry) => (
-          <article key={entry.id} className="list-item">
-            <h3 style={{ margin: "0 0 0.25rem", fontFamily: "var(--font-display)" }}>{entry.title}</h3>
-            <p className="meta">
-              {entry.author.displayName} · {new Date(entry.createdAt).toLocaleString("ru-RU")}
-            </p>
-            <p style={{ whiteSpace: "pre-wrap" }}>{entry.body}</p>
-            <button type="button" className="ghost-btn" onClick={() => remove(entry.id)}>
-              Удалить
-            </button>
-          </article>
-        ))}
+      <div className="diary-thread">
+        {entries.length === 0 ? (
+          <p className="muted">Пока пусто — напишите первое сообщение.</p>
+        ) : null}
+        {entries.map((entry) => {
+          const role = entry.author.genderRole === "girl" ? "girl" : "boy";
+          return (
+            <article
+              key={entry.id}
+              className={role === "girl" ? "diary-bubble diary-bubble--girl" : "diary-bubble diary-bubble--boy"}
+            >
+              <p className="diary-bubble__title">{entry.title}</p>
+              <p className="meta" style={{ marginTop: 0 }}>
+                {entry.author.displayName} · {new Date(entry.createdAt).toLocaleString("ru-RU")}
+              </p>
+              <p style={{ whiteSpace: "pre-wrap", marginBottom: "0.5rem" }}>{entry.body}</p>
+              <button type="button" className="ghost-btn" onClick={() => remove(entry.id)}>
+                Удалить
+              </button>
+            </article>
+          );
+        })}
       </div>
     </div>
   );

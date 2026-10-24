@@ -6,7 +6,10 @@ export default async function GamesPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Игры" subtitle="Лёгкие партии только для вас двоих." />
+      <SectionHeader
+        title="Игры"
+        subtitle="Выберите игру для двоих — джойстик в вашей комнате."
+      />
       <GamesClient />
     </div>
   );

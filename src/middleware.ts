@@ -19,10 +19,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req,
-    secret: process.env.AUTH_SECRET,
-  });
+  // Auth.js writes `__Secure-authjs.session-token` on HTTPS. Behind a reverse
+  // proxy `req.nextUrl.protocol` may still be `http:`, so try secure first,
+  // then the bare cookie name used on local HTTP.
+  const secret = process.env.AUTH_SECRET;
+  const token =
+    (await getToken({ req, secret, secureCookie: true })) ??
+    (await getToken({ req, secret, secureCookie: false }));
 
   const isDevGallery =
     process.env.NODE_ENV !== "production" && pathname.startsWith("/dev/");

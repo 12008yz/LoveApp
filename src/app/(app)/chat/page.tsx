@@ -6,7 +6,11 @@ export default async function ChatPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Чат" subtitle="Только вы двое. Сообщения приходят почти сразу." />
+      <SectionHeader
+        title="Чат"
+        subtitle="Только вы двое. Можно сменить имя и фото, отправить стикер."
+      />
+
       <ChatClient />
     </div>
   );

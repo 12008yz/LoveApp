@@ -1,59 +1,30 @@
-import { copyFileSync, existsSync, mkdirSync } from "fs";
-import path from "path";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { isDemoMode } from "@/lib/demo-mode";
 
-/**
- * Layero free runtime has no libssl.so — force the statically linked query
- * engine binary (engineType = "binary" + linux-static-x64).
- */
-function preferStaticQueryEngineBinary() {
-  if (process.platform !== "linux") return;
-  if (process.env.PRISMA_QUERY_ENGINE_BINARY) return;
+function createRealPrisma(): PrismaClient {
+  // Lazy require so DEMO_MODE never loads the native query engine
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaClient: Client } = require("@prisma/client") as typeof import("@prisma/client");
 
-  const names = ["query-engine-linux-static-x64"];
-  const roots = [
-    path.join(process.cwd(), "node_modules", ".prisma", "client"),
-    path.join(process.cwd(), "node_modules", "@prisma", "engines"),
-  ];
-  for (const root of roots) {
-    for (const name of names) {
-      const file = path.join(root, name);
-      if (existsSync(file)) {
-        process.env.PRISMA_QUERY_ENGINE_BINARY = file;
-        return;
-      }
-    }
+  const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+  const client =
+    globalForPrisma.prisma ??
+    new Client({
+      log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    });
+
+  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
+  return client;
+}
+
+function loadPrisma(): PrismaClient {
+  if (isDemoMode()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createDemoPrisma } = require("./demo-prisma") as typeof import("./demo-prisma");
+    return createDemoPrisma() as unknown as PrismaClient;
   }
+  return createRealPrisma();
 }
 
-/**
- * SQLite on Layero: bake schema into prisma/data.db at build time, then copy
- * to /tmp so the runtime can write.
- */
-function ensureWritableSqlite() {
-  const url = process.env.DATABASE_URL || "";
-  if (!url.startsWith("file:")) return;
-
-  const targetPath = url.replace(/^file:/, "");
-  if (!targetPath.startsWith("/tmp/")) return;
-  if (existsSync(targetPath)) return;
-
-  const baked = path.join(process.cwd(), "prisma", "data.db");
-  if (!existsSync(baked)) return;
-
-  mkdirSync(path.dirname(targetPath), { recursive: true });
-  copyFileSync(baked, targetPath);
-}
-
-preferStaticQueryEngineBinary();
-ensureWritableSqlite();
-
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export const prisma = loadPrisma();

@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
+import { DEMO_COUPLE_ID, DEMO_USER, isDemoMode } from "@/lib/demo-mode";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/lib/invite";
 
-const DEMO_PASSWORD = "demo1234";
-
 /**
- * One-tap demo: create a guest user + active couple with a placeholder partner,
- * then return credentials for client-side signIn.
+ * One-tap demo login.
+ * On Layero (DEMO_MODE) — no database: fixed guest credentials + in-memory couple.
+ * Locally — creates a real guest user + couple in SQLite/Postgres.
  */
 export async function POST() {
+  if (isDemoMode()) {
+    return NextResponse.json({
+      ok: true,
+      email: DEMO_USER.email,
+      password: DEMO_USER.password,
+      coupleId: DEMO_COUPLE_ID,
+      demoMode: true,
+    });
+  }
+
   try {
-    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 8);
-    // Guest uses example.com (passes Auth.js/zod). Partner stays @loveapp.local
-    // so demo detection + DELETE cleanup match /api/couple/demo.
+    const password = "demo1234";
+    const passwordHash = await bcrypt.hash(password, 8);
     const email = `guest.${nanoid(8)}@example.com`;
     const partnerEmail = `demo+${nanoid(10)}@loveapp.local`;
 
@@ -51,7 +60,7 @@ export async function POST() {
     return NextResponse.json({
       ok: true,
       email,
-      password: DEMO_PASSWORD,
+      password,
       coupleId: couple.id,
     });
   } catch (err) {

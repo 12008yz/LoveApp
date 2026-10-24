@@ -1,21 +1,23 @@
 :root {
-  /* Color */
-  --ink: #1c1412;
-  --ink-soft: #4a3a36;
-  --ink-faint: rgba(28, 20, 18, 0.55);
-  --paper: #fff6ef;
-  --paper-deep: #f0e0d4;
-  --paper-glass: rgba(255, 250, 247, 0.9);
-  --rose: #b4234a;
-  --rose-deep: #7a1833;
-  --rose-soft: #ffd6e0;
-  --rose-mist: rgba(180, 35, 74, 0.1);
+  /* Color — Alina palette: cream / burgundy / slate */
+  --ink: #2a1819;
+  --ink-soft: #677178;
+  --ink-faint: rgba(103, 113, 120, 0.7);
+  --paper: #efead4;
+  --paper-deep: #e4dec4;
+  --paper-glass: rgba(239, 234, 212, 0.92);
+  --rose: #7a2a2c;
+  --rose-deep: #5c1e1f;
+  --rose-soft: #f0d8d4;
+  --rose-mist: rgba(92, 30, 31, 0.1);
+  --slate: #677178;
+  --slate-soft: rgba(103, 113, 120, 0.14);
   --lamp: #e8a05a;
   --wood: #8b5e45;
   --mint: #d8f3e4;
-  --line: rgba(28, 20, 18, 0.12);
-  --danger: #7a1833;
-  --focus: rgba(180, 35, 74, 0.35);
+  --line: rgba(42, 24, 25, 0.12);
+  --danger: #5c1e1f;
+  --focus: rgba(92, 30, 31, 0.35);
 
   /* Elevation */
   --shadow: 0 18px 50px rgba(74, 24, 40, 0.12);

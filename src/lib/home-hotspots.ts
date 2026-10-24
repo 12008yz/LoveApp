@@ -1,4 +1,4 @@
-/** Percent hotspots for `public/art/home-room.jpg` (864×1152, 3:4). */
+/** Percent hotspots for `public/art/home-room.jpg` (modern cozy room, 3:4). */
 export type HomeHotspot = {
   href: string;
   label: string;
@@ -9,20 +9,22 @@ export type HomeHotspot = {
 };
 
 export const HOME_HOTSPOTS: HomeHotspot[] = [
-  // Full mountain painting frame
-  { href: "/album", label: "Альбом", left: 4, top: 3, width: 40, height: 30 },
-  // Wall calendar only (right of painting)
-  { href: "/calendar", label: "Календарь", left: 54, top: 5, width: 17, height: 27 },
-  // Three polaroids on string
-  { href: "/timeline", label: "История", left: 55, top: 29, width: 30, height: 13 },
-  // Floral pillow on sofa (pings)
-  { href: "/pings", label: "Пинги", left: 70, top: 44, width: 20, height: 15 },
-  // Open notebook + pen
-  { href: "/diary", label: "Дневник", left: 22, top: 51, width: 30, height: 17 },
-  // Smartphone (further right — was overlapping notebook)
-  { href: "/chat", label: "Чат", left: 63, top: 53, width: 20, height: 16 },
-  // Folded map (further left — was overlapping letters)
-  { href: "/map", label: "Карта", left: 28, top: 68, width: 26, height: 14 },
-  // Envelope stack
-  { href: "/letters", label: "Письма", left: 66, top: 69, width: 22, height: 15 },
+  // Framed photo collage — left wall
+  { href: "/album", label: "Альбом", left: 4, top: 6, width: 40, height: 28 },
+  // Wall calendar
+  { href: "/calendar", label: "Календарь", left: 46, top: 8, width: 16, height: 22 },
+  // Glowing constellation lightbox
+  { href: "/constellation", label: "Созвездие", left: 64, top: 10, width: 18, height: 20 },
+  // Game controller on right shelf
+  { href: "/games", label: "Игры", left: 78, top: 36, width: 18, height: 16 },
+  // Heart cushion on sofa
+  { href: "/pings", label: "Сигналы", left: 70, top: 48, width: 22, height: 12 },
+  // Open notebook + pink/blue pens
+  { href: "/diary", label: "Дневник", left: 26, top: 56, width: 28, height: 14 },
+  // Smartphone with chat bubbles
+  { href: "/chat", label: "Чат", left: 52, top: 60, width: 18, height: 12 },
+  // Open city map for date places
+  { href: "/map", label: "Свидания", left: 28, top: 68, width: 28, height: 12 },
+  // Tied cream envelopes
+  { href: "/letters", label: "Письма", left: 58, top: 72, width: 24, height: 14 },
 ];

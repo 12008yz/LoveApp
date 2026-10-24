@@ -21,7 +21,7 @@ export function PingsClient() {
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function send(kind: string) {
@@ -46,7 +46,9 @@ export function PingsClient() {
         ))}
       </div>
       <div className="soft-panel">
-        {pings.length === 0 ? <p className="muted">Пингов ещё не было — отправьте первый.</p> : null}
+        {pings.length === 0 ? (
+          <p className="muted">Сигналов ещё не было — отправьте первый.</p>
+        ) : null}
         {pings.map((p) => (
           <div key={p.id} className="list-item">
             <strong>{label(p.kind)}</strong>

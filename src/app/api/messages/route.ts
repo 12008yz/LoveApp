@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "asc" },
     take: after ? 100 : 200,
     include: {
-      author: { select: { id: true, displayName: true } },
+      author: { select: { id: true, displayName: true, avatarPath: true } },
     },
   });
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       body: parsed.data.body.trim(),
     },
     include: {
-      author: { select: { id: true, displayName: true } },
+      author: { select: { id: true, displayName: true, avatarPath: true } },
     },
   });
 

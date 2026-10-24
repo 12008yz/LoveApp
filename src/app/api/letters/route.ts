@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
-import { presentLetter } from "@/lib/letters";
+import { isActionableUnread, presentLetter } from "@/lib/letters";
 
 export async function GET() {
   const authResult = await requireCoupleApi();
@@ -16,8 +16,11 @@ export async function GET() {
 
   const now = new Date();
   const masked = letters.map((letter) => presentLetter(letter, authResult.user.id, now));
+  const unreadCount = masked.filter((letter) =>
+    isActionableUnread(letter, authResult.user.id),
+  ).length;
 
-  return NextResponse.json({ letters: masked });
+  return NextResponse.json({ letters: masked, unreadCount });
 }
 
 const schema = z.object({

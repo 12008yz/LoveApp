@@ -6,7 +6,10 @@ export default async function DiaryPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Дневник" subtitle="Общий блокнот пары — пишите вдвоём." />
+      <SectionHeader
+        title="Дневник"
+        subtitle="Как переписка: её заметки — с розовой пометкой, его — с голубой."
+      />
       <DiaryClient />
     </div>
   );

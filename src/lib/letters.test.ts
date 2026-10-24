@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presentLetter } from "@/lib/letters";
+import { isActionableUnread, isInboxUnread, presentLetter } from "@/lib/letters";
 
 const base = {
   id: "1",
@@ -31,5 +31,19 @@ describe("presentLetter", () => {
     expect(view.canRead).toBe(true);
     expect(view.locked).toBe(false);
     expect(view.body).toBe("secret text");
+  });
+});
+
+describe("letter unread helpers", () => {
+  it("counts locked partner mail as inbox unread but not actionable", () => {
+    const view = presentLetter(base, "partner", new Date("2026-06-01"));
+    expect(isInboxUnread(view, "partner")).toBe(true);
+    expect(isActionableUnread(view, "partner")).toBe(false);
+  });
+
+  it("marks unlocked unopened partner mail as actionable", () => {
+    const view = presentLetter(base, "partner", new Date("2031-01-01"));
+    expect(isInboxUnread(view, "partner")).toBe(true);
+    expect(isActionableUnread(view, "partner")).toBe(true);
   });
 });

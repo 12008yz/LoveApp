@@ -2,44 +2,42 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-type Place = { id: string; name: string };
 type Item = {
   id: string;
   caption: string | null;
   filePath: string;
   createdAt: string;
   author: { displayName: string };
-  place: Place | null;
 };
 
 export function AlbumClient() {
   const [items, setItems] = useState<Item[]>([]);
-  const [places, setPlaces] = useState<Place[]>([]);
+  const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   async function load() {
-    const [mediaRes, placesRes] = await Promise.all([fetch("/api/media"), fetch("/api/places")]);
+    const mediaRes = await fetch("/api/media");
     const media = await mediaRes.json();
-    const placesJson = await placesRes.json();
     setItems(media.items || []);
-    setPlaces(placesJson.places || []);
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const res = await fetch("/api/media", { method: "POST", body: fd });
     const json = await res.json();
     if (!res.ok) {
       setError(json.error || "Ошибка загрузки");
       return;
     }
-    e.currentTarget.reset();
+    form.reset();
+    setPreview(null);
     setItems((prev) => [json.item, ...prev]);
   }
 
@@ -48,38 +46,67 @@ export function AlbumClient() {
       <form className="soft-panel" onSubmit={onSubmit}>
         {error ? <p className="error-text">{error}</p> : null}
         <div className="field">
-          <label htmlFor="file">Фото</label>
-          <input id="file" name="file" type="file" accept="image/*" required />
+          <label htmlFor="file">Фотография</label>
+          <input
+            id="file"
+            name="file"
+            type="file"
+            accept="image/*"
+            required
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) {
+                setPreview(null);
+                return;
+              }
+              const url = URL.createObjectURL(file);
+              setPreview(url);
+            }}
+          />
         </div>
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt=""
+            style={{
+              width: "100%",
+              maxHeight: 220,
+              objectFit: "cover",
+              borderRadius: "var(--radius-md)",
+              marginBottom: "0.75rem",
+            }}
+          />
+        ) : null}
         <div className="field">
-          <label htmlFor="caption">Подпись</label>
-          <input id="caption" name="caption" maxLength={300} />
-        </div>
-        <div className="field">
-          <label htmlFor="placeId">Место (опционально)</label>
-          <select id="placeId" name="placeId" defaultValue="">
-            <option value="">Без места</option>
-            {places.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <label htmlFor="caption">Подпись к фото</label>
+          <textarea
+            id="caption"
+            name="caption"
+            required
+            maxLength={300}
+            placeholder="Что это за момент?"
+            rows={3}
+          />
         </div>
         <button className="btn btn-primary" type="submit">
-          Загрузить
+          В ленту
         </button>
       </form>
-      <div className="album-grid">
+
+      <div className="album-feed">
+        {items.length === 0 ? (
+          <p className="muted">Лента пуста — добавьте первое совместное фото.</p>
+        ) : null}
         {items.map((item) => (
-          <figure key={item.id} className="soft-panel" style={{ margin: 0, padding: "0.5rem" }}>
+          <figure key={item.id} className="album-feed__card">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.filePath} alt={item.caption || "Фото"} />
-            <figcaption style={{ padding: "0.5rem 0.25rem" }}>
-              <div>{item.caption || "Без подписи"}</div>
+            <figcaption>
+              <div style={{ whiteSpace: "pre-wrap" }}>{item.caption}</div>
               <div className="meta">
-                {item.author.displayName}
-                {item.place ? ` · ${item.place.name}` : ""}
+                {item.author.displayName} ·{" "}
+                {new Date(item.createdAt).toLocaleString("ru-RU")}
               </div>
             </figcaption>
           </figure>

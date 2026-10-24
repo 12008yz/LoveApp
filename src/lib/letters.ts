@@ -23,3 +23,31 @@ export function presentLetter<T extends LetterLike>(
     canRead,
   };
 }
+
+export type PresentedLetter = ReturnType<typeof presentLetter>;
+
+/** Inbox tab: partner letters not marked opened yet (incl. still time-locked). */
+export function isInboxUnread(
+  letter: { authorId: string; openedAt: Date | string | null },
+  viewerId: string,
+) {
+  return letter.authorId !== viewerId && !letter.openedAt;
+}
+
+/** Red-dot / badge: partner letter that can be opened and is not opened yet. */
+export function isActionableUnread(
+  letter: {
+    authorId: string;
+    openedAt: Date | string | null;
+    locked: boolean;
+    canRead: boolean;
+  },
+  viewerId: string,
+) {
+  return (
+    letter.authorId !== viewerId &&
+    !letter.locked &&
+    letter.canRead &&
+    !letter.openedAt
+  );
+}

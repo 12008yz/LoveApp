@@ -9,9 +9,12 @@ const nextConfig: NextConfig = {
       static: 180,
     },
   },
-  // Keep SQLite schema/db next to the standalone server on Layero
+  // Keep SQLite + static Prisma engine next to the standalone server on Layero
   outputFileTracingIncludes: {
-    "/*": ["./prisma/**/*"],
+    "/**": [
+      "./prisma/**/*",
+      "./node_modules/.prisma/client/query-engine-linux-static-x64",
+    ],
   },
   webpack: (config, { dev }) => {
     if (dev) {

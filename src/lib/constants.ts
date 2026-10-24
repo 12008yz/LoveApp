@@ -19,15 +19,51 @@ export const PRIMARY_NAV = [
 
 /** Everything else — “Ещё” sheet. */
 export const MORE_NAV = [
-  { href: "/pings", label: "Пинги" },
+  { href: "/pings", label: "Сигналы" },
   { href: "/calendar", label: "Календарь" },
   { href: "/letters", label: "Письма" },
-  { href: "/map", label: "Карта" },
-  { href: "/timeline", label: "История" },
+  { href: "/map", label: "Свидания" },
+  { href: "/constellation", label: "Созвездие" },
   { href: "/games", label: "Игры" },
   { href: "/wishlist", label: "Желания" },
   { href: "/care", label: "Забота" },
   { href: "/mood", label: "Настроение" },
+] as const;
+
+/** Quick sticker pack for chat (sent as plain message body). */
+export const CHAT_STICKERS = ["❤️", "🥰", "😘", "🤗", "✨", "🌙", "☕", "🌸", "🐻", "💌"] as const;
+
+export const GAME_HUB = [
+  {
+    id: "tictactoe",
+    title: "Крестики-нолики",
+    blurb: "Классика на двоих",
+    playable: true as const,
+  },
+  {
+    id: "words",
+    title: "Слова",
+    blurb: "Загадай слово партнёру",
+    playable: true as const,
+  },
+  {
+    id: "truth",
+    title: "Правда или действие",
+    blurb: "Скоро — карточки для двоих",
+    playable: false as const,
+  },
+  {
+    id: "quiz",
+    title: "Кто лучше знает",
+    blurb: "Скоро — вопросы о вас",
+    playable: false as const,
+  },
+  {
+    id: "memory",
+    title: "Память",
+    blurb: "Скоро — парные карточки",
+    playable: false as const,
+  },
 ] as const;
 
 /** All destinations (home tiles, etc.). */

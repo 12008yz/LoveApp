@@ -6,7 +6,10 @@ export default async function MapPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Карта" subtitle="Места, которые важны вам двоим." />
+      <SectionHeader
+        title="Свидания"
+        subtitle="Отметьте на карте место, куда хотите сходить со своей второй половинкой — адрес, день и время."
+      />
       <MapClient />
     </div>
   );

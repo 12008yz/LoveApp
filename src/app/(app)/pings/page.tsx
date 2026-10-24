@@ -6,7 +6,10 @@ export default async function PingsPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Пинги" subtitle="Короткий сигнал, когда слов много не нужно." />
+      <SectionHeader
+        title="Сигналы"
+        subtitle="Нажми — партнёру придёт уведомление. Скучаю, обними, люблю — без лишних слов."
+      />
       <PingsClient />
     </div>
   );

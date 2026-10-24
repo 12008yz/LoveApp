@@ -1,6 +1,15 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Free Layero / demo mode — skip background cron
+  if (
+    process.env.DISABLE_CRON === "1" ||
+    process.env.DEMO_MODE === "1" ||
+    process.env.DEMO_MODE === "true"
+  ) {
+    return;
+  }
+
   const base = process.env.AUTH_URL || "http://localhost:3000";
   const secret = process.env.CRON_SECRET;
   if (!secret) return;

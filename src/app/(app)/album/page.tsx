@@ -6,7 +6,10 @@ export default async function AlbumPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader title="Альбом" subtitle="Фото с подписями — ваша общая лента." />
+      <SectionHeader
+        title="Альбом"
+        subtitle="Совместные фото в ленте — к каждому можно добавить пару слов."
+      />
       <AlbumClient />
     </div>
   );

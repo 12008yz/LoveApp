@@ -34,7 +34,7 @@ export async function GET(req: Request) {
             },
             orderBy: { createdAt: "asc" },
             include: {
-              author: { select: { id: true, displayName: true } },
+              author: { select: { id: true, displayName: true, avatarPath: true } },
             },
           });
           if (messages.length) {

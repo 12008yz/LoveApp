@@ -17,6 +17,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [letterUnread, setLetterUnread] = useState(0);
 
   const moreActive = MORE_NAV.some(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -24,6 +25,24 @@ export function AppShell({
 
   useEffect(() => {
     setMoreOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUnread() {
+      try {
+        const res = await fetch("/api/letters");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setLetterUnread(Number(json.unreadCount) || 0);
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadUnread();
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -88,6 +107,7 @@ export function AppShell({
             <div className="more-sheet__grid">
               {MORE_NAV.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const showDot = item.href === "/letters" && letterUnread > 0;
                 return (
                   <Link
                     key={item.href}
@@ -98,6 +118,7 @@ export function AppShell({
                     onClick={() => setMoreOpen(false)}
                   >
                     {item.label}
+                    {showDot ? <span className="nav-dot" aria-label="Есть непрочитанные письма" /> : null}
                   </Link>
                 );
               })}

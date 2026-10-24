@@ -17,6 +17,7 @@ model User {
   email        String   @unique
   passwordHash String
   displayName  String
+  avatarPath   String?
   createdAt    DateTime @default(now())
 
   membership         CoupleMember?
@@ -163,13 +164,15 @@ model MediaItem {
 }
 
 model Place {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   coupleId  String
   name      String
+  address   String?
   lat       Float
   lng       Float
   notes     String?
-  createdAt DateTime @default(now())
+  visitAt   DateTime?
+  createdAt DateTime  @default(now())
 
   couple Couple      @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   media  MediaItem[]
