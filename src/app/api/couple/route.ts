@@ -12,7 +12,9 @@ export async function GET() {
       couple: {
         include: {
           members: {
-            include: { user: { select: { id: true, displayName: true, email: true } } },
+            include: {
+              user: { select: { id: true, displayName: true, email: true, avatarPath: true } },
+            },
           },
         },
       },

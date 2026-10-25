@@ -1,8 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui";
 import { CHAT_STICKERS } from "@/lib/constants";
 
 type Message = {
@@ -14,40 +13,124 @@ type Message = {
   author: { id: string; displayName: string; avatarPath?: string | null };
 };
 
-type Profile = {
+type Person = {
   id: string;
   displayName: string;
   avatarPath: string | null;
 };
 
+const GROUP_GAP_MS = 5 * 60 * 1000;
+
 function Avatar({
   name,
   src,
+  size = "md",
 }: {
   name: string;
   src?: string | null;
+  size?: "sm" | "md" | "lg";
 }) {
+  const cls = `chat-avatar chat-avatar--${size}`;
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img className="chat-avatar" src={src} alt="" />;
+    return <img className={cls} src={src} alt="" />;
   }
   return (
-    <span className="chat-avatar chat-avatar--fallback" aria-hidden>
+    <span className={`${cls} chat-avatar--fallback`} aria-hidden>
       {(name || "?").slice(0, 1).toUpperCase()}
     </span>
   );
 }
 
-export function ChatClient() {
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function formatDayLabel(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startMsg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startToday.getTime() - startMsg.getTime()) / 86_400_000);
+  if (diffDays === 0) return "Сегодня";
+  if (diffDays === 1) return "Вчера";
+  return d.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+}
+
+function sameDay(a: string, b: string) {
+  return dayKey(a) === dayKey(b);
+}
+
+function isStickerBody(body: string) {
+  return body.length <= 3 && /\p{Extended_Pictographic}/u.test(body);
+}
+
+type Row =
+  | { kind: "day"; key: string; label: string }
+  | {
+      kind: "msg";
+      key: string;
+      message: Message;
+      mine: boolean;
+      firstInGroup: boolean;
+      lastInGroup: boolean;
+    };
+
+function buildRows(messages: Message[], me: string | undefined): Row[] {
+  const rows: Row[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+
+    if (!prev || !sameDay(prev.createdAt, m.createdAt)) {
+      rows.push({ kind: "day", key: `day-${dayKey(m.createdAt)}`, label: formatDayLabel(m.createdAt) });
+    }
+
+    const mine = m.authorId === me;
+    const closePrev =
+      prev &&
+      prev.authorId === m.authorId &&
+      sameDay(prev.createdAt, m.createdAt) &&
+      new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() <= GROUP_GAP_MS;
+    const closeNext =
+      next &&
+      next.authorId === m.authorId &&
+      sameDay(next.createdAt, m.createdAt) &&
+      new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime() <= GROUP_GAP_MS;
+
+    rows.push({
+      kind: "msg",
+      key: m.id,
+      message: m,
+      mine,
+      firstInGroup: !closePrev,
+      lastInGroup: !closeNext,
+    });
+  }
+  return rows;
+}
+
+export function ChatClient({ partner }: { partner: Person | null }) {
   const { data, update } = useSession();
-  const me = data?.user?.id;
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Person | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [stickersOpen, setStickersOpen] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Prefer session; fall back to profile so bubbles don't flip sides while session loads
+  const me = data?.user?.id || profile?.id;
+  const rows = useMemo(() => buildRows(messages, me), [messages, me]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,11 +158,22 @@ export function ChatClient() {
           setMessages((prev) => {
             const ids = new Set(prev.map((m) => m.id));
             const next = [...prev];
-            for (const m of payload.messages) {
+            for (const m of payload.messages as Message[]) {
               if (!ids.has(m.id)) next.push(m);
             }
             return next;
           });
+        }
+        if (payload.type === "reads" && payload.reads?.length) {
+          const readMap = new Map(
+            (payload.reads as { id: string; readAt: string }[]).map((r) => [r.id, r.readAt]),
+          );
+          setMessages((prev) =>
+            prev.map((m) => {
+              const readAt = readMap.get(m.id);
+              return readAt && !m.readAt ? { ...m, readAt } : m;
+            }),
+          );
         }
       } catch {
         /* ignore */
@@ -93,21 +187,26 @@ export function ChatClient() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, stickersOpen]);
 
   async function sendBody(body: string) {
     const trimmed = body.trim();
-    if (!trimmed) return;
-    const res = await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: trimmed }),
-    });
-    const json = await res.json();
-    if (json.message) {
-      setMessages((prev) =>
-        prev.some((m) => m.id === json.message.id) ? prev : [...prev, json.message],
-      );
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: trimmed }),
+      });
+      const json = await res.json();
+      if (json.message) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === json.message.id) ? prev : [...prev, json.message],
+        );
+      }
+    } finally {
+      setSending(false);
     }
   }
 
@@ -115,6 +214,7 @@ export function ChatClient() {
     e.preventDefault();
     const body = text;
     setText("");
+    setStickersOpen(false);
     await sendBody(body);
   }
 
@@ -138,23 +238,51 @@ export function ChatClient() {
     }
   }
 
+  const headerName = partner?.displayName || "Чат";
+  const headerAvatar = partner?.avatarPath;
+
   return (
-    <div className="stack">
-      <div className="soft-panel chat-profile">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Avatar name={profile?.displayName || "Вы"} src={profile?.avatarPath} />
-          <div style={{ flex: 1 }}>
-            <strong>{profile?.displayName || "Вы"}</strong>
-            <p className="meta" style={{ margin: 0 }}>
-              Имя и фото в чате
-            </p>
+    <div className="chat-page">
+      <header className="chat-top">
+        <button
+          type="button"
+          className="chat-top__btn"
+          onClick={() => {
+            setProfileOpen(true);
+            setStickersOpen(false);
+          }}
+          aria-label="Профиль и настройки чата"
+        >
+          <Avatar name={headerName} src={headerAvatar} size="lg" />
+          <div className="chat-top__meta">
+            <strong className="chat-top__name">{headerName}</strong>
+            <span className="chat-top__sub">Только вы двое</span>
           </div>
-          <Button type="button" variant="secondary" size="sm" onClick={() => setProfileOpen((v) => !v)}>
-            {profileOpen ? "Скрыть" : "Изменить"}
-          </Button>
-        </div>
-        {profileOpen ? (
-          <form onSubmit={saveProfile} style={{ marginTop: "0.85rem" }}>
+        </button>
+      </header>
+
+      {profileOpen ? (
+        <div className="chat-profile-sheet" role="dialog" aria-label="Ваш профиль">
+          <div className="chat-profile-sheet__head">
+            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+              <Avatar name={profile?.displayName || "Вы"} src={profile?.avatarPath} size="lg" />
+              <div>
+                <strong>Ваш профиль</strong>
+                <p className="meta" style={{ margin: 0 }}>
+                  Имя и фото в чате
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="chat-icon-btn"
+              onClick={() => setProfileOpen(false)}
+              aria-label="Закрыть"
+            >
+              ✕
+            </button>
+          </div>
+          <form onSubmit={saveProfile} className="chat-profile-sheet__form">
             {profileError ? <p className="error-text">{profileError}</p> : null}
             <div className="field">
               <label htmlFor="displayName">Имя в чате</label>
@@ -171,61 +299,128 @@ export function ChatClient() {
               <label htmlFor="avatar">Фото</label>
               <input id="avatar" name="avatar" type="file" accept="image/*" />
             </div>
-            <Button type="submit" size="sm">
+            <button type="submit" className="chat-profile-sheet__save">
               Сохранить
-            </Button>
+            </button>
           </form>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <div className="soft-panel chat-layout">
-        <div className="chat-log">
-          {messages.length === 0 ? (
-            <p className="ui-muted" style={{ textAlign: "center", margin: "2rem 0" }}>
-              Напишите первое сообщение любимому человеку.
-            </p>
-          ) : null}
-          {messages.map((m) => (
-            <div key={m.id} className={m.authorId === me ? "bubble mine" : "bubble"}>
-              <div className="meta" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <Avatar name={m.author.displayName} src={m.author.avatarPath} />
-                {m.author.displayName}
+      <div className="chat-log">
+        {messages.length === 0 ? (
+          <p className="chat-empty">Напишите первое сообщение любимому человеку.</p>
+        ) : null}
+        {rows.map((row) => {
+          if (row.kind === "day") {
+            return (
+              <div key={row.key} className="chat-day">
+                <span>{row.label}</span>
               </div>
-              <div style={{ fontSize: m.body.length <= 3 ? "1.6rem" : undefined }}>{m.body}</div>
-              <div className="meta">
-                {new Date(m.createdAt).toLocaleString("ru-RU", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  day: "numeric",
-                  month: "short",
-                })}
-                {m.authorId === me && m.readAt ? " · прочитано" : ""}
+            );
+          }
+          const { message: m, mine, firstInGroup, lastInGroup } = row;
+          const sticker = isStickerBody(m.body);
+          return (
+            <div
+              key={row.key}
+              className={[
+                "chat-row",
+                mine ? "chat-row--mine" : "chat-row--theirs",
+                firstInGroup ? "chat-row--first" : "",
+                lastInGroup ? "chat-row--last" : "chat-row--grouped",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {!mine ? (
+                <div className="chat-row__avatar">
+                  {lastInGroup ? (
+                    <Avatar name={m.author.displayName} src={m.author.avatarPath} size="sm" />
+                  ) : null}
+                </div>
+              ) : null}
+              <div
+                className={[
+                  "chat-bubble",
+                  mine ? "chat-bubble--mine" : "chat-bubble--theirs",
+                  lastInGroup ? "chat-bubble--tail" : "",
+                  sticker ? "chat-bubble--sticker" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
+                  {m.body}
+                </span>
+                <span className="chat-bubble__meta">
+                  <time dateTime={m.createdAt}>
+                    {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                  {mine ? (
+                    <span
+                      className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
+                      aria-label={m.readAt ? "Прочитано" : "Отправлено"}
+                    >
+                      {m.readAt ? "✓✓" : "✓"}
+                    </span>
+                  ) : null}
+                </span>
               </div>
             </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-        <div className="sticker-bar" aria-label="Стикеры">
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {stickersOpen ? (
+        <div className="chat-stickers" aria-label="Стикеры">
           {CHAT_STICKERS.map((sticker) => (
-            <button key={sticker} type="button" onClick={() => void sendBody(sticker)}>
+            <button
+              key={sticker}
+              type="button"
+              className="chat-stickers__btn"
+              onClick={() => {
+                void sendBody(sticker);
+                setStickersOpen(false);
+              }}
+            >
               {sticker}
             </button>
           ))}
         </div>
-        <form className="chat-form" onSubmit={send}>
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Сообщение…"
-            maxLength={4000}
-            enterKeyHint="send"
-            autoComplete="off"
-          />
-          <Button type="submit" size="sm" disabled={!text.trim()}>
-            →
-          </Button>
-        </form>
-      </div>
+      ) : null}
+
+      <form className="chat-composer" onSubmit={send}>
+        <button
+          type="button"
+          className={stickersOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+          aria-label="Стикеры"
+          aria-pressed={stickersOpen}
+          onClick={() => setStickersOpen((v) => !v)}
+        >
+          ☺
+        </button>
+        <input
+          className="chat-composer__input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Сообщение…"
+          maxLength={4000}
+          enterKeyHint="send"
+          autoComplete="off"
+        />
+        <button
+          type="submit"
+          className="chat-send"
+          disabled={!text.trim() || sending}
+          aria-label="Отправить"
+        >
+          ➤
+        </button>
+      </form>
     </div>
   );
 }

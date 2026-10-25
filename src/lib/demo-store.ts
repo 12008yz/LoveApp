@@ -84,20 +84,52 @@ function seed(): Store {
 
   const message = [
     {
+      id: "demo-msg-0",
+      coupleId: DEMO_COUPLE_ID,
+      authorId: DEMO_PARTNER.id,
+      body: "Вчера вечером было уютно 🌙",
+      createdAt: new Date(yesterday.getTime() + 20 * 3600_000),
+      readAt: yesterday,
+    },
+    {
       id: "demo-msg-1",
       coupleId: DEMO_COUPLE_ID,
       authorId: DEMO_PARTNER.id,
       body: "Привет! Это демо — можно всё потыкать",
       createdAt: hourAgo,
-      readAt: null,
+      readAt: new Date(hourAgo.getTime() + 30_000),
+    },
+    {
+      id: "demo-msg-1b",
+      coupleId: DEMO_COUPLE_ID,
+      authorId: DEMO_PARTNER.id,
+      body: "Чат, домик, письма — всё уже здесь",
+      createdAt: new Date(hourAgo.getTime() + 45_000),
+      readAt: new Date(hourAgo.getTime() + 90_000),
     },
     {
       id: "demo-msg-2",
       coupleId: DEMO_COUPLE_ID,
       authorId: DEMO_USER.id,
       body: "Супер, заходим в домик",
-      createdAt: new Date(hourAgo.getTime() + 60_000),
-      readAt: hourAgo,
+      createdAt: new Date(hourAgo.getTime() + 120_000),
+      readAt: new Date(hourAgo.getTime() + 150_000),
+    },
+    {
+      id: "demo-msg-3",
+      coupleId: DEMO_COUPLE_ID,
+      authorId: DEMO_USER.id,
+      body: "❤️",
+      createdAt: new Date(hourAgo.getTime() + 130_000),
+      readAt: new Date(hourAgo.getTime() + 160_000),
+    },
+    {
+      id: "demo-msg-4",
+      coupleId: DEMO_COUPLE_ID,
+      authorId: DEMO_PARTNER.id,
+      body: "Настройки пары теперь в «Ещё» → Настройки",
+      createdAt: new Date(hourAgo.getTime() + 200_000),
+      readAt: null,
     },
   ];
 

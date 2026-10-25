@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   const { couple, user } = authResult;
   const encoder = new TextEncoder();
   let lastCheck = new Date();
+  let lastReadCheck = new Date();
   let closed = false;
 
   const stream = new ReadableStream({
@@ -48,7 +49,25 @@ export async function GET(req: Request) {
               },
               data: { readAt: new Date() },
             });
-          } else {
+          }
+
+          // Partner marked our messages read — push ✓✓ updates
+          const reads = await prisma.message.findMany({
+            where: {
+              coupleId: couple.id,
+              authorId: user.id,
+              readAt: { gt: lastReadCheck },
+            },
+            orderBy: { readAt: "asc" },
+            select: { id: true, readAt: true },
+          });
+          if (reads.length) {
+            const last = reads[reads.length - 1]?.readAt;
+            if (last) lastReadCheck = last;
+            send({ type: "reads", reads });
+          }
+
+          if (!messages.length && !reads.length) {
             send({ type: "ping" });
           }
         } catch {

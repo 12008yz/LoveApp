@@ -8,23 +8,26 @@ export type HomeHotspot = {
   height: number;
 };
 
+/**
+ * Hit boxes aligned to painted objects (art is 1:1 with stage — no idle CSS scale).
+ */
 export const HOME_HOTSPOTS: HomeHotspot[] = [
-  // Framed photo collage — left wall
-  { href: "/album", label: "Альбом", left: 4, top: 6, width: 40, height: 28 },
-  // Wall calendar
-  { href: "/calendar", label: "Календарь", left: 46, top: 8, width: 16, height: 22 },
-  // Glowing constellation lightbox
-  { href: "/constellation", label: "Созвездие", left: 64, top: 10, width: 18, height: 20 },
-  // Game controller on right shelf
-  { href: "/games", label: "Игры", left: 78, top: 36, width: 18, height: 16 },
-  // Heart cushion on sofa
-  { href: "/pings", label: "Сигналы", left: 70, top: 48, width: 22, height: 12 },
-  // Open notebook + pink/blue pens
-  { href: "/diary", label: "Дневник", left: 26, top: 56, width: 28, height: 14 },
-  // Smartphone with chat bubbles
-  { href: "/chat", label: "Чат", left: 52, top: 60, width: 18, height: 12 },
-  // Open city map for date places
-  { href: "/map", label: "Свидания", left: 28, top: 68, width: 28, height: 12 },
-  // Tied cream envelopes
-  { href: "/letters", label: "Письма", left: 58, top: 72, width: 24, height: 14 },
+  // Photo collage frame
+  { href: "/album", label: "Альбом", left: 5, top: 7, width: 38, height: 27 },
+  // Wall calendar grid
+  { href: "/calendar", label: "Календарь", left: 50, top: 8, width: 15, height: 18 },
+  // Constellation lightbox under the calendar
+  { href: "/constellation", label: "Созвездие", left: 52, top: 28, width: 22, height: 16 },
+  // Controller on right shelf
+  { href: "/games", label: "Игры", left: 80, top: 36, width: 16, height: 15 },
+  // Heart pillow
+  { href: "/pings", label: "Сигналы", left: 58, top: 44, width: 20, height: 12 },
+  // Open notebook
+  { href: "/diary", label: "Дневник", left: 20, top: 54, width: 30, height: 12 },
+  // Smartphone (not the pens)
+  { href: "/chat", label: "Чат", left: 64, top: 56, width: 18, height: 14 },
+  // City map with pins
+  { href: "/map", label: "Свидания", left: 22, top: 70, width: 34, height: 13 },
+  // Envelope stack
+  { href: "/letters", label: "Письма", left: 58, top: 74, width: 26, height: 13 },
 ];

@@ -22,7 +22,7 @@ export function HomeRoom() {
     <div className="home-room">
       {tip ? (
         <p className="home-room__tip" role="status">
-          Нажми на предметы: альбом, созвездие, джойстик, дневник, письма…
+          Нажми на предмет в комнате — откроется раздел.
           <button type="button" className="home-room__tip-dismiss" onClick={() => setTip(false)}>
             Понятно
           </button>
@@ -42,7 +42,7 @@ export function HomeRoom() {
           <Link
             key={spot.href}
             href={spot.href}
-            prefetch={false}
+            prefetch
             scroll={false}
             className="home-room__hotspot"
             style={{

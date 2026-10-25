@@ -16,11 +16,13 @@ export const getMembership = cache(async (userId: string) => {
       couple: {
         include: {
           members: {
-            include: { user: { select: { id: true, displayName: true, email: true } } },
+            include: {
+              user: { select: { id: true, displayName: true, email: true, avatarPath: true } },
+            },
           },
         },
       },
-      user: { select: { id: true, displayName: true, email: true } },
+      user: { select: { id: true, displayName: true, email: true, avatarPath: true } },
     },
   });
 });

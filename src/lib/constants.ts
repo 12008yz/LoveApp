@@ -28,6 +28,7 @@ export const MORE_NAV = [
   { href: "/wishlist", label: "Желания" },
   { href: "/care", label: "Забота" },
   { href: "/mood", label: "Настроение" },
+  { href: "/settings", label: "Настройки" },
 ] as const;
 
 /** Quick sticker pack for chat (sent as plain message body). */

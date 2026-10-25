@@ -29,7 +29,7 @@ export function SettingsPanel({
       {demoCouple ? (
         <p className="meta" style={{ marginTop: "0.35rem" }}>
           Сейчас демо с виртуальным партнёром — по коду третьего не добавить. Для реальной
-          пары удалите домик ниже и создайте заново.
+          пары удалите пару кнопкой ниже и создайте заново.
         </p>
       ) : (
         <p className="meta" style={{ marginTop: "0.35rem" }}>
