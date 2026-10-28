@@ -16,8 +16,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # Official minio/minio + minio/mc removed from Docker Hub (2026).
+  # pgsty/silo is S3-compatible (same MINIO_* env / API).
   minio:
-    image: minio/minio:latest
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -30,17 +32,33 @@ services:
       - love_minio:/data
 
   minio-init:
-    image: minio/mc:latest
+    image: amazon/aws-cli:2.27.31
     depends_on:
       - minio
-    entrypoint: >
-      /bin/sh -c "
-      sleep 3;
-      mc alias set local http://minio:9000 minioadmin minioadmin;
-      mc mb -p local/loveapp || true;
-      mc anonymous set download local/loveapp;
-      exit 0;
-      "
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        sleep 3
+        aws --endpoint-url http://minio:9000 s3 mb s3://loveapp 2>/dev/null || true
+        printf '%s\n' '{
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"AWS": ["*"]},
+            "Action": ["s3:GetObject"],
+            "Resource": ["arn:aws:s3:::loveapp/*"]
+          }]
+        }' > /tmp/policy.json
+        aws --endpoint-url http://minio:9000 s3api put-bucket-policy \
+          --bucket loveapp --policy file:///tmp/policy.json
+        exit 0
+
 
 volumes:
   love_pg:

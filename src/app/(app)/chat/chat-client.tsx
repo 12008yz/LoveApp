@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { CHAT_STICKERS } from "@/lib/constants";
 
@@ -70,6 +70,60 @@ function isStickerBody(body: string) {
   return body.length <= 3 && /\p{Extended_Pictographic}/u.test(body);
 }
 
+function ChatSvgIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+function StickerIcon() {
+  return (
+    <ChatSvgIcon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 10h.01M15.5 10h.01" />
+      <path d="M8.2 14.5c1.1 1.4 2.5 2 3.8 2s2.7-.6 3.8-2" />
+    </ChatSvgIcon>
+  );
+}
+
+function SendIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M5 12h13" />
+      <path d="m13 6 6 6-6 6" />
+    </ChatSvgIcon>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <ChatSvgIcon>
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M5.5 19.2c1.4-3 3.5-4.4 6.5-4.4s5.1 1.4 6.5 4.4" />
+    </ChatSvgIcon>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M7 7l10 10M17 7 7 17" />
+    </ChatSvgIcon>
+  );
+}
+
 type Row =
   | { kind: "day"; key: string; label: string }
   | {
@@ -116,7 +170,7 @@ function buildRows(messages: Message[], me: string | undefined): Row[] {
   return rows;
 }
 
-export function ChatClient({ partner }: { partner: Person | null }) {
+export function ChatClient() {
   const { data, update } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -238,29 +292,8 @@ export function ChatClient({ partner }: { partner: Person | null }) {
     }
   }
 
-  const headerName = partner?.displayName || "Чат";
-  const headerAvatar = partner?.avatarPath;
-
   return (
     <div className="chat-page">
-      <header className="chat-top">
-        <button
-          type="button"
-          className="chat-top__btn"
-          onClick={() => {
-            setProfileOpen(true);
-            setStickersOpen(false);
-          }}
-          aria-label="Профиль и настройки чата"
-        >
-          <Avatar name={headerName} src={headerAvatar} size="lg" />
-          <div className="chat-top__meta">
-            <strong className="chat-top__name">{headerName}</strong>
-            <span className="chat-top__sub">Только вы двое</span>
-          </div>
-        </button>
-      </header>
-
       {profileOpen ? (
         <div className="chat-profile-sheet" role="dialog" aria-label="Ваш профиль">
           <div className="chat-profile-sheet__head">
@@ -279,7 +312,7 @@ export function ChatClient({ partner }: { partner: Person | null }) {
               onClick={() => setProfileOpen(false)}
               aria-label="Закрыть"
             >
-              ✕
+              <CloseIcon />
             </button>
           </div>
           <form onSubmit={saveProfile} className="chat-profile-sheet__form">
@@ -399,9 +432,12 @@ export function ChatClient({ partner }: { partner: Person | null }) {
           className={stickersOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
           aria-label="Стикеры"
           aria-pressed={stickersOpen}
-          onClick={() => setStickersOpen((v) => !v)}
+          onClick={() => {
+            setStickersOpen((v) => !v);
+            setProfileOpen(false);
+          }}
         >
-          ☺
+          <StickerIcon />
         </button>
         <input
           className="chat-composer__input"
@@ -413,12 +449,24 @@ export function ChatClient({ partner }: { partner: Person | null }) {
           autoComplete="off"
         />
         <button
+          type="button"
+          className={profileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+          aria-label="Ваш профиль"
+          aria-pressed={profileOpen}
+          onClick={() => {
+            setProfileOpen((v) => !v);
+            setStickersOpen(false);
+          }}
+        >
+          <ProfileIcon />
+        </button>
+        <button
           type="submit"
           className="chat-send"
           disabled={!text.trim() || sending}
           aria-label="Отправить"
         >
-          ➤
+          <SendIcon />
         </button>
       </form>
     </div>

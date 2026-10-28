@@ -1,0 +1,90 @@
+# Postgres + S3-compatible object storage for LoveApp on VPS.
+# Ports bind to 127.0.0.1 only — not exposed to the internet.
+#
+# Note: official minio/minio and minio/mc were removed from Docker Hub (2026).
+# We use pgsty/silo (MinIO-compatible: same MINIO_* env, S3 API, data format).
+#
+# Usage:
+#   cp .env.example .env   # set strong passwords (password ≥ 8 chars)
+#   docker compose up -d
+
+name: loveapp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - love_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    # S3-compatible MinIO fork (anonymous pull works)
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    restart: unless-stopped
+    env_file: .env
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - love_minio:/data
+
+  minio-init:
+    # minio/mc also gone from Hub — create bucket + public read via AWS CLI
+    image: amazon/aws-cli:2.27.31
+    depends_on:
+      minio:
+        condition: service_started
+    env_file: .env
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-loveapp}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        i=0
+        until aws --endpoint-url http://minio:9000 s3 ls >/dev/null 2>&1; do
+          i=$$((i+1))
+          if [ "$$i" -gt 30 ]; then
+            echo "MinIO/Silo not ready"
+            exit 1
+          fi
+          sleep 1
+        done
+        aws --endpoint-url http://minio:9000 s3 mb "s3://$$S3_BUCKET" 2>/dev/null || true
+        printf '%s\n' "{
+          \"Version\": \"2012-10-17\",
+          \"Statement\": [{
+            \"Effect\": \"Allow\",
+            \"Principal\": {\"AWS\": [\"*\"]},
+            \"Action\": [\"s3:GetObject\"],
+            \"Resource\": [\"arn:aws:s3:::$$S3_BUCKET/*\"]
+          }]
+        }" > /tmp/policy.json
+        aws --endpoint-url http://minio:9000 s3api put-bucket-policy \
+          --bucket "$$S3_BUCKET" --policy file:///tmp/policy.json
+        echo "bucket $$S3_BUCKET ready"
+        exit 0
+
+volumes:
+  love_pg:
+  love_minio:
