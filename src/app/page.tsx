@@ -1,14 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { isDemoMode } from "@/lib/demo-mode";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui";
-import { DemoEnterButton } from "@/components/demo-enter-button";
 
 export default async function LandingPage() {
   const session = await auth();
   if (session?.user) redirect("/home");
-  const demo = isDemoMode();
 
   return (
     <section className="landing landing--cozy">
@@ -18,23 +15,14 @@ export default async function LandingPage() {
       <div className="hero-copy">
         <p className="brand-hero">LoveApp</p>
         <h2>Ваш общий домик</h2>
-        <p>
-          {demo
-            ? "Демо-просмотр без регистрации — зайдите и посмотрите разделы."
-            : "Чат, дневник и воспоминания — только для вас двоих, удобно с телефона."}
-        </p>
+        <p>Чат, дневник и воспоминания — только для вас двоих, удобно с телефона.</p>
         <div className="cta-row">
-          <DemoEnterButton variant="primary" />
-          {demo ? null : (
-            <>
-              <Link href="/register">
-                <Button variant="secondary">Создать аккаунт</Button>
-              </Link>
-              <Link href="/login">
-                <Button variant="ghost">Войти</Button>
-              </Link>
-            </>
-          )}
+          <Link href="/register">
+            <Button variant="primary">Создать аккаунт</Button>
+          </Link>
+          <Link href="/login">
+            <Button variant="ghost">Войти</Button>
+          </Link>
         </div>
       </div>
     </section>

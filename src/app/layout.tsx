@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Source_Serif_4 } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "@/components/providers";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
@@ -36,15 +37,26 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#b4234a",
+  // Default dark; ThemeProvider / boot script override to match user preference.
+  themeColor: "#0f1218",
   width: "device-width",
   initialScale: 1,
 };
 
+const themeBootScript = `(function(){try{var k="loveapp-theme";var p=localStorage.getItem(k)||"dark";var d=p==="light"?"light":p==="dark"?"dark":(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",d);var c=d==="dark"?"#0f1218":"#b4234a";document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute("content",c);});}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ru" className={`${display.variable} ${manrope.variable} h-full`}>
+    <html
+      lang="ru"
+      className={`${display.variable} ${manrope.variable} h-full`}
+      suppressHydrationWarning
+      data-theme="dark"
+    >
       <body className="min-h-full antialiased">
+        <Script id="theme-boot" strategy="beforeInteractive">
+          {themeBootScript}
+        </Script>
         <Providers>
           <PwaRegister />
           {children}

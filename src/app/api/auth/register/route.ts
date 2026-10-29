@@ -12,7 +12,7 @@ const schema = z.object({
 export async function POST(req: Request) {
   if (process.env.DEMO_MODE === "1" || process.env.DEMO_MODE === "true") {
     return NextResponse.json(
-      { error: "В демо-режиме регистрация отключена — нажмите «Попробовать демо»" },
+      { error: "В демо-режиме хостинга регистрация отключена" },
       { status: 403 },
     );
   }

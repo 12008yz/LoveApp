@@ -137,7 +137,7 @@ export function PushSettings() {
         )}
         <button
           type="button"
-          className="btn"
+          className="btn btn-primary"
           onClick={onTest}
           disabled={testing || status === "unsupported" || vapidOk === false}
           title={vapidOk === false ? "Сначала нужны VAPID-ключи на сервере" : undefined}

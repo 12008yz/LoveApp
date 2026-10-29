@@ -4,7 +4,6 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
-import { DemoEnterButton } from "@/components/demo-enter-button";
 import { Button, ErrorText, Field, Input, Panel } from "@/components/ui";
 
 function RegisterForm() {
@@ -92,11 +91,6 @@ function RegisterForm() {
           </p>
         </Panel>
       </form>
-      {nextPath.startsWith("/join/") ? null : (
-        <div style={{ marginTop: "0.85rem", maxWidth: 420, marginInline: "auto" }}>
-          <DemoEnterButton variant="secondary" block />
-        </div>
-      )}
     </div>
   );
 }
