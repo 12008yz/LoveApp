@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { canEditLetter, isActionableUnread } from "@/lib/letters";
 
@@ -48,6 +49,7 @@ export function LettersClient() {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [phase, setPhase] = useState<EnvelopePhase>("idle");
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function load() {
@@ -57,11 +59,21 @@ export function LettersClient() {
   }
 
   useEffect(() => {
+    setMounted(true);
     void load();
     return () => {
       if (openTimer.current) clearTimeout(openTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!overlay) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [overlay]);
 
   const inbox = useMemo(
     () => (me ? letters.filter((l) => l.authorId !== me) : []),
@@ -95,6 +107,15 @@ export function LettersClient() {
     setPhase("idle");
     setBusy(false);
   }
+
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) closeOverlay();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [overlay, busy]);
 
   function openCompose() {
     clearOpenTimer();
@@ -132,12 +153,19 @@ export function LettersClient() {
     await load();
   }
 
+  function parseUnlockAt(raw: FormDataEntryValue | null) {
+    const date = new Date(String(raw || ""));
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
   async function onCompose(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (busy) return;
     const form = e.currentTarget;
     const fd = new FormData(form);
-    const unlockAt = new Date(String(fd.get("unlockAt"))).toISOString();
+    const unlockAt = parseUnlockAt(fd.get("unlockAt"));
+    if (!unlockAt) return;
     setBusy(true);
     setPhase("sealing");
     await new Promise((r) => setTimeout(r, 1000));
@@ -164,7 +192,8 @@ export function LettersClient() {
     e.preventDefault();
     if (!activeLetter || busy) return;
     const fd = new FormData(e.currentTarget);
-    const unlockAt = new Date(String(fd.get("unlockAt"))).toISOString();
+    const unlockAt = parseUnlockAt(fd.get("unlockAt"));
+    if (!unlockAt) return;
     setBusy(true);
     const res = await fetch(`/api/letters/${activeLetter.id}`, {
       method: "PATCH",
@@ -255,118 +284,126 @@ export function LettersClient() {
         ))}
       </div>
 
-      {overlay ? (
-        <div className="letter-overlay" role="dialog" aria-modal="true" aria-label="Письмо">
-          <button
-            type="button"
-            className="letter-overlay__backdrop"
-            aria-label="Закрыть"
-            onClick={closeOverlay}
-            disabled={busy}
-          />
-          <div className={`letter-overlay__stage is-${phase}`}>
-            <div className="letter-env" aria-hidden={overlay.kind === "compose" && phase === "open"}>
-              <div className="letter-env__pocket" />
-              <div className="letter-env__flap" />
-            </div>
+      {mounted && overlay
+        ? createPortal(
+            <div className="letter-overlay" role="dialog" aria-modal="true" aria-label="Письмо">
+              <button
+                type="button"
+                className="letter-overlay__backdrop"
+                aria-label="Закрыть"
+                onClick={closeOverlay}
+                disabled={busy}
+              />
+              <div className={`letter-overlay__stage is-${phase}`}>
+                <div className="letter-env" aria-hidden={overlay.kind === "compose" && phase === "open"}>
+                  <div className="letter-env__pocket" />
+                  <div className="letter-env__flap" />
+                </div>
 
-            {overlay.kind === "compose" || overlay.kind === "edit" ? (
-              <form
-                className="letter-sheet"
-                onSubmit={overlay.kind === "compose" ? onCompose : onEdit}
-              >
-                <div className="field">
-                  <label htmlFor="letter-title">Заголовок</label>
-                  <input
-                    id="letter-title"
-                    name="title"
-                    required
-                    maxLength={120}
-                    defaultValue={overlay.kind === "edit" ? activeLetter?.title : undefined}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="letter-body">Текст</label>
-                  <textarea
-                    id="letter-body"
-                    name="body"
-                    required
-                    rows={6}
-                    maxLength={10000}
-                    defaultValue={overlay.kind === "edit" ? activeLetter?.body : undefined}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="letter-unlock">Открыть после</label>
-                  <input
-                    id="letter-unlock"
-                    name="unlockAt"
-                    type="datetime-local"
-                    required
-                    defaultValue={
-                      overlay.kind === "edit" && activeLetter
-                        ? toLocalInput(activeLetter.unlockAt)
-                        : undefined
-                    }
-                  />
-                </div>
-                <div className="letter-sheet__actions">
-                  <button type="button" className="btn btn-secondary" onClick={closeOverlay} disabled={busy}>
-                    Отмена
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={busy}>
-                    {overlay.kind === "compose" ? "Запечатать" : "Сохранить"}
-                  </button>
-                </div>
-              </form>
-            ) : null}
-
-            {overlay.kind === "view" && activeLetter ? (
-              <div className="letter-sheet">
-                {!activeLetter.canRead ? (
-                  <>
-                    <h3 className="letter-sheet__title">{activeLetter.title}</h3>
-                    <p className="muted">
-                      Ещё закрыто до{" "}
-                      {new Date(activeLetter.unlockAt).toLocaleString("ru-RU")}
-                    </p>
-                    <button type="button" className="btn btn-secondary" onClick={closeOverlay}>
-                      Закрыть
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="letter-sheet__title">{activeLetter.title}</h3>
-                    <p className="meta" style={{ marginTop: 0 }}>
-                      {activeLetter.author.displayName}
-                      {" · "}
-                      {new Date(activeLetter.unlockAt).toLocaleString("ru-RU")}
-                    </p>
-                    <p className="letter-sheet__body">{activeLetter.body}</p>
+                {overlay.kind === "compose" || overlay.kind === "edit" ? (
+                  <form
+                    className="letter-sheet"
+                    onSubmit={overlay.kind === "compose" ? onCompose : onEdit}
+                  >
+                    <div className="field">
+                      <label htmlFor="letter-title">Заголовок</label>
+                      <input
+                        id="letter-title"
+                        name="title"
+                        required
+                        maxLength={120}
+                        defaultValue={overlay.kind === "edit" ? activeLetter?.title : undefined}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="letter-body">Текст</label>
+                      <textarea
+                        id="letter-body"
+                        name="body"
+                        required
+                        rows={5}
+                        maxLength={10000}
+                        defaultValue={overlay.kind === "edit" ? activeLetter?.body : undefined}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="letter-unlock">Открыть после</label>
+                      <input
+                        id="letter-unlock"
+                        name="unlockAt"
+                        type="datetime-local"
+                        required
+                        defaultValue={
+                          overlay.kind === "edit" && activeLetter
+                            ? toLocalInput(activeLetter.unlockAt)
+                            : undefined
+                        }
+                      />
+                    </div>
                     <div className="letter-sheet__actions">
-                      {editable ? (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => {
-                            setOverlay({ kind: "edit", id: activeLetter.id });
-                            setPhase("open");
-                          }}
-                        >
-                          Изменить
-                        </button>
-                      ) : null}
-                      <button type="button" className="btn btn-primary" onClick={closeOverlay}>
-                        Закрыть
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={closeOverlay}
+                        disabled={busy}
+                      >
+                        Отмена
+                      </button>
+                      <button type="submit" className="btn btn-primary" disabled={busy}>
+                        {overlay.kind === "compose" ? "Запечатать" : "Сохранить"}
                       </button>
                     </div>
-                  </>
-                )}
+                  </form>
+                ) : null}
+
+                {overlay.kind === "view" && activeLetter ? (
+                  <div className="letter-sheet">
+                    {!activeLetter.canRead ? (
+                      <>
+                        <h3 className="letter-sheet__title">{activeLetter.title}</h3>
+                        <p className="muted">
+                          Ещё закрыто до{" "}
+                          {new Date(activeLetter.unlockAt).toLocaleString("ru-RU")}
+                        </p>
+                        <button type="button" className="btn btn-secondary" onClick={closeOverlay}>
+                          Закрыть
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="letter-sheet__title">{activeLetter.title}</h3>
+                        <p className="meta" style={{ marginTop: 0 }}>
+                          {activeLetter.author.displayName}
+                          {" · "}
+                          {new Date(activeLetter.unlockAt).toLocaleString("ru-RU")}
+                        </p>
+                        <p className="letter-sheet__body">{activeLetter.body}</p>
+                        <div className="letter-sheet__actions">
+                          {editable ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setOverlay({ kind: "edit", id: activeLetter.id });
+                                setPhase("open");
+                              }}
+                            >
+                              Изменить
+                            </button>
+                          ) : null}
+                          <button type="button" className="btn btn-primary" onClick={closeOverlay}>
+                            Закрыть
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
