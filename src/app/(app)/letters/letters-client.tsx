@@ -115,6 +115,8 @@ export function LettersClient() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // closeOverlay closes over latest busy/overlay via render closure
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlay, busy]);
 
   function openCompose() {
@@ -168,7 +170,8 @@ export function LettersClient() {
     if (!unlockAt) return;
     setBusy(true);
     setPhase("sealing");
-    await new Promise((r) => setTimeout(r, 1000));
+    // Match letter-env-send / flap-close timing in CSS (~1.35s).
+    await new Promise((r) => setTimeout(r, 1400));
     const res = await fetch("/api/letters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -295,8 +298,13 @@ export function LettersClient() {
                 disabled={busy}
               />
               <div className={`letter-overlay__stage is-${phase}`}>
-                <div className="letter-env" aria-hidden={overlay.kind === "compose" && phase === "open"}>
-                  <div className="letter-env__pocket" />
+                <div
+                  className="letter-env"
+                  aria-hidden={phase === "open" && overlay.kind !== "view"}
+                >
+                  <div className="letter-env__back" />
+                  <div className="letter-env__paper" />
+                  <div className="letter-env__front" />
                   <div className="letter-env__flap" />
                 </div>
 

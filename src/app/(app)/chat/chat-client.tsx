@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { CHAT_REACTIONS, CHAT_STICKERS } from "@/lib/constants";
 import { formatLastSeen, isOnline } from "@/lib/chat-presence";
@@ -29,10 +30,20 @@ type Person = {
   avatarPath: string | null;
 };
 
-type MenuState = { messageId: string } | null;
+type MenuState = {
+  messageId: string;
+  mine: boolean;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  menuAbove: boolean;
+} | null;
 
 const GROUP_GAP_MS = 5 * 60_000;
 const LONG_PRESS_MS = 420;
+const FOCUS_MENU_ESTIMATE = 268;
+const FOCUS_REACTIONS_H = 52;
 
 function Avatar({
   name,
@@ -146,6 +157,70 @@ function SearchIcon() {
   );
 }
 
+function ReplyIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+    </ChatSvgIcon>
+  );
+}
+
+function EditIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L8 20H4v-4L16.5 3.5z" />
+    </ChatSvgIcon>
+  );
+}
+
+function PinIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M12 17v5" />
+      <path d="M9 2h6l1 7H8L9 2z" />
+      <path d="M8 9h8l-1.2 4H9.2L8 9z" />
+    </ChatSvgIcon>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <ChatSvgIcon>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M4 16V6a2 2 0 0 1 2-2h10" />
+    </ChatSvgIcon>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="m6 7 1 13h10l1-13" />
+    </ChatSvgIcon>
+  );
+}
+
+function buildMenuState(messageId: string, mine: boolean): MenuState {
+  const bubble = document
+    .querySelector(`[data-message-id="${messageId}"] .chat-bubble`)
+    ?.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const pad = 10;
+  const width = bubble?.width ?? Math.min(240, vw - 32);
+  const height = bubble?.height ?? 48;
+  const left = bubble ? Math.min(Math.max(pad, bubble.left), vw - width - pad) : pad;
+  const top = bubble ? Math.min(Math.max(pad, bubble.top), vh - height - pad) : pad + 80;
+  const spaceBelow = vh - (top + height) - pad;
+  const needBelow = FOCUS_MENU_ESTIMATE + 12;
+  const menuAbove = spaceBelow < needBelow && top > needBelow + FOCUS_REACTIONS_H;
+  return { messageId, mine, top, left, width, height, menuAbove };
+}
+
 type Row =
   | { kind: "day"; key: string; label: string }
   | {
@@ -225,6 +300,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [portalReady, setPortalReady] = useState(false);
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -583,6 +659,35 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     setSearchHits(json.messages || []);
   }
 
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.getSelection()?.removeAllRanges();
+    const onKey = (e: Event) => {
+      if ((e as globalThis.KeyboardEvent).key === "Escape") setMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  function openMessageMenu(messageId: string, mine: boolean) {
+    window.getSelection()?.removeAllRanges();
+    try {
+      navigator.vibrate?.(12);
+    } catch {
+      /* ignore */
+    }
+    setMenu(buildMenuState(messageId, mine));
+  }
+
   function openReply(m: MessageDto) {
     setMenu(null);
     setEditingId(null);
@@ -619,17 +724,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (editingId === m.id || replyTo?.id === m.id) clearComposerExtras();
   }
 
-  function startPress(messageId: string, clientX: number, clientY: number) {
+  function startPress(messageId: string, mine: boolean, clientX: number, clientY: number) {
     pressStart.current = { x: clientX, y: clientY };
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
-      window.getSelection()?.removeAllRanges();
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* ignore */
-      }
-      setMenu({ messageId });
+      openMessageMenu(messageId, mine);
       pressTimer.current = null;
     }, LONG_PRESS_MS);
   }
@@ -804,12 +903,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     .join(" ")}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    window.getSelection()?.removeAllRanges();
-                    setMenu({ messageId: m.id });
+                    openMessageMenu(m.id, mine);
                   }}
                   onPointerDown={(e) => {
                     if (e.pointerType === "mouse" && e.button !== 0) return;
-                    startPress(m.id, e.clientX, e.clientY);
+                    startPress(m.id, mine, e.clientX, e.clientY);
                   }}
                   onPointerMove={(e) => movePress(e.clientX, e.clientY)}
                   onPointerUp={endPress}
@@ -873,63 +971,134 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         })}
       </div>
 
-      {menu && menuMessage ? (
-        <div className="chat-sheet" role="dialog" aria-modal="true" aria-label="Действия с сообщением">
-          <button type="button" className="chat-sheet__backdrop" aria-label="Закрыть" onClick={() => setMenu(null)} />
-          <div className="chat-sheet__panel">
-            <div className="chat-sheet__handle" />
-            <div className="chat-sheet__preview">
-              <strong>{menuMessage.author.displayName}</strong>
-              <p>{menuMessage.body}</p>
-            </div>
-            <div className="chat-sheet__reactions">
-              {CHAT_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => void toggleReaction(menuMessage.id, emoji)}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            <div className="chat-sheet__actions">
-              <button type="button" onClick={() => openReply(menuMessage)}>
-                Ответить
-              </button>
-              {menuMessage.authorId === me ? (
-                <button type="button" onClick={() => openEdit(menuMessage)}>
-                  Изменить
-                </button>
-              ) : null}
+      {portalReady && menu && menuMessage
+        ? createPortal(
+            <div
+              className={`chat-focus${menu.mine ? " chat-focus--mine" : " chat-focus--theirs"}`}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Действия с сообщением"
+            >
               <button
                 type="button"
-                onClick={() => void setPin(pinnedMessageId === menuMessage.id ? null : menuMessage.id)}
-              >
-                {pinnedMessageId === menuMessage.id ? "Открепить" : "Закрепить"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(menuMessage.body);
-                  setMenu(null);
+                className="chat-focus__backdrop"
+                aria-label="Закрыть"
+                onClick={() => setMenu(null)}
+              />
+              <div
+                className="chat-focus__bubble"
+                style={{
+                  top: menu.top,
+                  left: menu.left,
+                  width: menu.width,
+                  minHeight: menu.height,
                 }}
               >
-                Копировать
-              </button>
-              {menuMessage.authorId === me ? (
+                <div
+                  className={[
+                    "chat-bubble",
+                    menu.mine ? "chat-bubble--mine" : "chat-bubble--theirs",
+                    isStickerBody(menuMessage.body) ? "chat-bubble--sticker" : "",
+                    "chat-bubble--focus",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <div className="chat-bubble__main">
+                    <span
+                      className={
+                        isStickerBody(menuMessage.body)
+                          ? "chat-bubble__sticker"
+                          : "chat-bubble__text"
+                      }
+                    >
+                      {menuMessage.body}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="chat-focus__reactions"
+                style={{
+                  top: Math.max(8, menu.top - FOCUS_REACTIONS_H - 8),
+                  left: menu.mine ? undefined : menu.left,
+                  right: menu.mine
+                    ? Math.max(8, window.innerWidth - menu.left - menu.width)
+                    : undefined,
+                }}
+              >
+                {CHAT_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => void toggleReaction(menuMessage.id, emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="chat-focus__menu"
+                style={{
+                  ...(menu.menuAbove
+                    ? {
+                        /* Above reactions, which sit above the bubble */
+                        top: Math.max(
+                          8,
+                          menu.top - FOCUS_REACTIONS_H - 16 - FOCUS_MENU_ESTIMATE,
+                        ),
+                      }
+                    : { top: menu.top + menu.height + 8 }),
+                  left: menu.mine ? undefined : menu.left,
+                  right: menu.mine
+                    ? Math.max(8, window.innerWidth - menu.left - menu.width)
+                    : undefined,
+                }}
+              >
+                <button type="button" onClick={() => openReply(menuMessage)}>
+                  <ReplyIcon />
+                  <span>Ответить</span>
+                </button>
+                {menuMessage.authorId === me ? (
+                  <button type="button" onClick={() => openEdit(menuMessage)}>
+                    <EditIcon />
+                    <span>Изменить</span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="chat-sheet__action--danger"
-                  onClick={() => void deleteMessage(menuMessage)}
+                  onClick={() => void setPin(pinnedMessageId === menuMessage.id ? null : menuMessage.id)}
                 >
-                  Удалить
+                  <PinIcon />
+                  <span>{pinnedMessageId === menuMessage.id ? "Открепить" : "Закрепить"}</span>
                 </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(menuMessage.body);
+                    setMenu(null);
+                  }}
+                >
+                  <CopyIcon />
+                  <span>Копировать</span>
+                </button>
+                {menuMessage.authorId === me ? (
+                  <button
+                    type="button"
+                    className="chat-focus__action--danger"
+                    onClick={() => void deleteMessage(menuMessage)}
+                  >
+                    <TrashIcon />
+                    <span>Удалить</span>
+                  </button>
+                ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {stickersOpen ? (
         <div className="chat-stickers" aria-label="Стикеры">
