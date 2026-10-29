@@ -11,7 +11,7 @@ export default async function SettingsPage() {
     <div>
       <SectionHeader
         title="Настройки"
-        subtitle="Код пары и опасные действия — отдельно от комнаты."
+        subtitle="Уведомления, код пары и опасные действия."
       />
       <SettingsPanel inviteCode={couple.inviteCode} demoCouple={demoCouple} />
     </div>

@@ -25,13 +25,23 @@ export type PushPayload = {
   url?: string;
 };
 
-export async function sendPushToUser(userId: string, payload: PushPayload) {
-  if (!setup()) return { sent: 0 };
+export type SendPushResult = {
+  sent: number;
+  reason?: "not_configured" | "no_subscriptions" | "all_failed" | "ok";
+  lastError?: string;
+};
+
+export async function sendPushToUser(
+  userId: string,
+  payload: PushPayload,
+): Promise<SendPushResult> {
+  if (!setup()) return { sent: 0, reason: "not_configured" };
 
   const subs = await prisma.pushSubscription.findMany({ where: { userId } });
-  if (!subs.length) return { sent: 0 };
+  if (!subs.length) return { sent: 0, reason: "no_subscriptions" };
 
   let sent = 0;
+  let lastError: string | undefined;
   for (const sub of subs) {
     try {
       await webpush.sendNotification(
@@ -43,13 +53,18 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
       );
       sent += 1;
     } catch (err: unknown) {
-      const status = typeof err === "object" && err && "statusCode" in err ? Number((err as { statusCode: number }).statusCode) : 0;
+      const status =
+        typeof err === "object" && err && "statusCode" in err
+          ? Number((err as { statusCode: number }).statusCode)
+          : 0;
+      lastError = err instanceof Error ? err.message : `push failed (${status || "unknown"})`;
       if (status === 404 || status === 410) {
         await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
       }
     }
   }
-  return { sent };
+  if (sent > 0) return { sent, reason: "ok" };
+  return { sent: 0, reason: "all_failed", lastError };
 }
 
 export async function notifyPartner(

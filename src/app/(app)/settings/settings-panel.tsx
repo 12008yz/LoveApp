@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PushSettings } from "@/components/push-settings";
 
 export function SettingsPanel({
   inviteCode,
@@ -23,22 +24,25 @@ export function SettingsPanel({
   }
 
   return (
-    <div className="soft-panel">
-      <h2 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Настройки пары</h2>
-      <p className="meta">Код пары: {inviteCode}</p>
-      {demoCouple ? (
-        <p className="meta" style={{ marginTop: "0.35rem" }}>
-          Сейчас демо с виртуальным партнёром — по коду третьего не добавить. Для реальной
-          пары удалите пару кнопкой ниже и создайте заново.
-        </p>
-      ) : (
-        <p className="meta" style={{ marginTop: "0.35rem" }}>
-          Код можно отправить партнёру, пока в домике одно место свободно.
-        </p>
-      )}
-      <button type="button" className="ghost-btn" onClick={leaveCouple} disabled={busy}>
-        {busy ? "Удаляем…" : "Удалить пару и данные"}
-      </button>
-    </div>
+    <>
+      <PushSettings />
+      <div className="soft-panel" style={{ marginTop: "1rem" }}>
+        <h2 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Настройки пары</h2>
+        <p className="meta">Код пары: {inviteCode}</p>
+        {demoCouple ? (
+          <p className="meta" style={{ marginTop: "0.35rem" }}>
+            Сейчас демо с виртуальным партнёром — по коду третьего не добавить. Для реальной
+            пары удалите пару кнопкой ниже и создайте заново.
+          </p>
+        ) : (
+          <p className="meta" style={{ marginTop: "0.35rem" }}>
+            Код можно отправить партнёру, пока в домике одно место свободно.
+          </p>
+        )}
+        <button type="button" className="ghost-btn" onClick={leaveCouple} disabled={busy}>
+          {busy ? "Удаляем…" : "Удалить пару и данные"}
+        </button>
+      </div>
+    </>
   );
 }
