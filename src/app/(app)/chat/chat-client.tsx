@@ -29,7 +29,7 @@ type Person = {
   avatarPath: string | null;
 };
 
-type MenuState = { messageId: string; x: number; y: number } | null;
+type MenuState = { messageId: string } | null;
 
 const GROUP_GAP_MS = 5 * 60_000;
 const LONG_PRESS_MS = 420;
@@ -41,7 +41,7 @@ function Avatar({
 }: {
   name: string;
   src?: string | null;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const cls = `chat-avatar chat-avatar--${size}`;
   if (src) {
@@ -213,6 +213,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [profile, setProfile] = useState<Person | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
@@ -225,17 +226,30 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [quoteText, setQuoteText] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [quotePicker, setQuotePicker] = useState<MessageDto | null>(null);
+  const quoteTextRef = useRef<HTMLParagraphElement>(null);
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stickToBottom = useRef(true);
+  const didInitialScroll = useRef(false);
+
+  function isNearBottom(el: HTMLElement, threshold = 100) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+  }
+
+  function scrollLogToBottom() {
+    const el = logRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }
 
   const me = data?.user?.id || profile?.id;
   const rows = useMemo(() => buildRows(messages, me), [messages, me]);
@@ -362,7 +376,24 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = logRef.current;
+    if (!el || messages.length === 0) return;
+
+    // First paint: jump to bottom instantly (no top→bottom animation).
+    if (!didInitialScroll.current) {
+      didInitialScroll.current = true;
+      stickToBottom.current = true;
+      requestAnimationFrame(() => {
+        scrollLogToBottom();
+        requestAnimationFrame(scrollLogToBottom);
+      });
+      return;
+    }
+
+    // Later updates: only follow if user is already at the bottom (or stickers opened).
+    if (stickToBottom.current || stickersOpen) {
+      requestAnimationFrame(scrollLogToBottom);
+    }
   }, [messages.length, stickersOpen]);
 
   useEffect(() => {
@@ -371,6 +402,17 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   }, [text]);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") closeProfile();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // closeProfile reads latest avatarPreview via state closure on each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileOpen, avatarPreview]);
 
   function clearComposerExtras() {
     setReplyTo(null);
@@ -419,6 +461,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Не удалось отправить");
       if (json.message) {
+        stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
       }
       setText("");
@@ -449,6 +492,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     }
   }
 
+  function closeProfile() {
+    setProfileOpen(false);
+    setProfileError("");
+    if (avatarPreview) {
+      URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(null);
+    }
+  }
+
   async function saveProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setProfileError("");
@@ -461,7 +513,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       return;
     }
     setProfile(json.user);
-    setProfileOpen(false);
+    closeProfile();
     try {
       await update({ name: json.user.displayName });
     } catch {
@@ -524,14 +576,17 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   function openReply(m: MessageDto, quote?: string | null) {
     setMenu(null);
+    setQuotePicker(null);
     setEditingId(null);
     setReplyTo(m);
     setQuoteText(quote?.trim() || null);
+    window.getSelection()?.removeAllRanges();
     textareaRef.current?.focus();
   }
 
   function openEdit(m: MessageDto) {
     setMenu(null);
+    setQuotePicker(null);
     setReplyTo(null);
     setQuoteText(null);
     setEditingId(m.id);
@@ -539,22 +594,40 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     textareaRef.current?.focus();
   }
 
-  function selectionQuoteFor(messageId: string): string | null {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return null;
-    const textSel = sel.toString().trim();
-    if (!textSel) return null;
-    const node = sel.anchorNode;
-    const el = node instanceof Element ? node : node?.parentElement;
-    if (!el?.closest(`[data-message-id="${messageId}"]`)) return null;
-    return textSel.slice(0, 500);
+  function openQuotePicker(m: MessageDto) {
+    setMenu(null);
+    setQuotePicker(m);
+    // Pre-select full text after paint so handles appear and can be shrunk/expanded.
+    requestAnimationFrame(() => {
+      const el = quoteTextRef.current;
+      if (!el) return;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    });
+  }
+
+  function confirmQuote(useSelection: boolean) {
+    if (!quotePicker) return;
+    const sel = window.getSelection()?.toString().trim() || "";
+    const quote = useSelection && sel ? sel.slice(0, 500) : quotePicker.body.slice(0, 500);
+    openReply(quotePicker, quote);
   }
 
   function startPress(messageId: string, clientX: number, clientY: number) {
+    if (quotePicker) return;
     pressStart.current = { x: clientX, y: clientY };
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
-      setMenu({ messageId, x: clientX, y: clientY });
+      window.getSelection()?.removeAllRanges();
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* ignore */
+      }
+      setMenu({ messageId });
       pressTimer.current = null;
     }, LONG_PRESS_MS);
   }
@@ -563,7 +636,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (!pressStart.current || !pressTimer.current) return;
     const dx = Math.abs(clientX - pressStart.current.x);
     const dy = Math.abs(clientY - pressStart.current.y);
-    if (dx > 10 || dy > 10) {
+    if (dx > 14 || dy > 14) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
@@ -595,7 +668,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             onClick={() => {
               setSearchOpen((v) => !v);
               setStickersOpen(false);
-              setProfileOpen(false);
+              if (profileOpen) closeProfile();
             }}
           >
             <SearchIcon />
@@ -605,9 +678,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             className={profileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
             aria-label="Ваш профиль"
             onClick={() => {
-              setProfileOpen((v) => !v);
-              setStickersOpen(false);
-              setSearchOpen(false);
+              if (profileOpen) {
+                closeProfile();
+              } else {
+                setProfileOpen(true);
+                setStickersOpen(false);
+                setSearchOpen(false);
+              }
             }}
           >
             <ProfileIcon />
@@ -668,52 +745,16 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         </div>
       ) : null}
 
-      {profileOpen ? (
-        <div className="chat-profile-sheet" role="dialog" aria-label="Ваш профиль">
-          <div className="chat-profile-sheet__head">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-              <Avatar name={profile?.displayName || "Вы"} src={profile?.avatarPath} size="lg" />
-              <div>
-                <strong>Ваш профиль</strong>
-                <p className="meta" style={{ margin: 0 }}>
-                  Имя и фото в чате
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="chat-icon-btn"
-              onClick={() => setProfileOpen(false)}
-              aria-label="Закрыть"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-          <form onSubmit={saveProfile} className="chat-profile-sheet__form">
-            {profileError ? <p className="error-text">{profileError}</p> : null}
-            <div className="field">
-              <label htmlFor="displayName">Имя в чате</label>
-              <input
-                id="displayName"
-                name="displayName"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                maxLength={40}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="avatar">Фото</label>
-              <input id="avatar" name="avatar" type="file" accept="image/*" />
-            </div>
-            <button type="submit" className="chat-profile-sheet__save">
-              Сохранить
-            </button>
-          </form>
-        </div>
-      ) : null}
-
-      <div className="chat-log" ref={logRef} onClick={() => setMenu(null)}>
+      <div
+        className="chat-log"
+        ref={logRef}
+        onClick={() => setMenu(null)}
+        onScroll={() => {
+          const el = logRef.current;
+          if (!el) return;
+          stickToBottom.current = isNearBottom(el);
+        }}
+      >
         {messages.length === 0 ? (
           <p className="chat-empty">Напишите первое сообщение любимому человеку.</p>
         ) : null}
@@ -749,28 +790,20 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 </div>
               ) : null}
               <div className="chat-bubble-wrap">
-                {m.replyTo ? (
-                  <button
-                    type="button"
-                    className="chat-reply-chip"
-                    onClick={() => scrollToMessage(m.replyTo!.id)}
-                  >
-                    <strong>{m.replyTo.author.displayName}</strong>
-                    <span>{m.quoteText || m.replyTo.body}</span>
-                  </button>
-                ) : null}
                 <div
                   className={[
                     "chat-bubble",
                     mine ? "chat-bubble--mine" : "chat-bubble--theirs",
                     lastInGroup ? "chat-bubble--tail" : "",
                     sticker ? "chat-bubble--sticker" : "",
+                    m.replyTo ? "chat-bubble--with-quote" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setMenu({ messageId: m.id, x: e.clientX, y: e.clientY });
+                    window.getSelection()?.removeAllRanges();
+                    setMenu({ messageId: m.id });
                   }}
                   onPointerDown={(e) => {
                     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -780,26 +813,42 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   onPointerUp={endPress}
                   onPointerCancel={endPress}
                 >
-                  <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
-                    {m.body}
-                  </span>
-                  <span className="chat-bubble__meta">
-                    {m.editedAt ? <span className="chat-edited">изм.</span> : null}
-                    <time dateTime={m.createdAt}>
-                      {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                    {mine ? (
-                      <span
-                        className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
-                        aria-label={m.readAt ? "Прочитано" : "Отправлено"}
-                      >
-                        {m.readAt ? "✓✓" : "✓"}
-                      </span>
-                    ) : null}
-                  </span>
+                  {m.replyTo ? (
+                    <button
+                      type="button"
+                      className="chat-quote"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        scrollToMessage(m.replyTo!.id);
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <strong className="chat-quote__author">{m.replyTo.author.displayName}</strong>
+                      <span className="chat-quote__text">{m.quoteText || m.replyTo.body}</span>
+                    </button>
+                  ) : null}
+                  <div className="chat-bubble__main">
+                    <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
+                      {m.body}
+                    </span>
+                    <span className="chat-bubble__meta">
+                      {m.editedAt ? <span className="chat-edited">изм.</span> : null}
+                      <time dateTime={m.createdAt}>
+                        {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </time>
+                      {mine ? (
+                        <span
+                          className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
+                          aria-label={m.readAt ? "Прочитано" : "Отправлено"}
+                        >
+                          {m.readAt ? "✓✓" : "✓"}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
                 </div>
                 {m.reactions?.length ? (
                   <div className={`chat-reactions ${mine ? "chat-reactions--mine" : ""}`}>
@@ -820,47 +869,91 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
 
       {menu && menuMessage ? (
-        <div className="chat-menu" style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 280) }}>
-          <button type="button" onClick={() => openReply(menuMessage)}>
-            Ответить
-          </button>
-          <button
-            type="button"
-            onClick={() => openReply(menuMessage, selectionQuoteFor(menuMessage.id))}
-          >
-            Цитировать
-          </button>
-          {menuMessage.authorId === me ? (
-            <button type="button" onClick={() => openEdit(menuMessage)}>
-              Изменить
-            </button>
-          ) : null}
-          <div className="chat-menu__reactions">
-            {CHAT_REACTIONS.map((emoji) => (
-              <button key={emoji} type="button" onClick={() => void toggleReaction(menuMessage.id, emoji)}>
-                {emoji}
+        <div className="chat-sheet" role="dialog" aria-modal="true" aria-label="Действия с сообщением">
+          <button type="button" className="chat-sheet__backdrop" aria-label="Закрыть" onClick={() => setMenu(null)} />
+          <div className="chat-sheet__panel">
+            <div className="chat-sheet__handle" />
+            <div className="chat-sheet__preview">
+              <strong>{menuMessage.author.displayName}</strong>
+              <p>{menuMessage.body}</p>
+            </div>
+            <div className="chat-sheet__reactions">
+              {CHAT_REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => void toggleReaction(menuMessage.id, emoji)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="chat-sheet__actions">
+              <button type="button" onClick={() => openReply(menuMessage)}>
+                Ответить
               </button>
-            ))}
+              <button type="button" onClick={() => openQuotePicker(menuMessage)}>
+                Цитировать…
+              </button>
+              {menuMessage.authorId === me ? (
+                <button type="button" onClick={() => openEdit(menuMessage)}>
+                  Изменить
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void setPin(pinnedMessageId === menuMessage.id ? null : menuMessage.id)}
+              >
+                {pinnedMessageId === menuMessage.id ? "Открепить" : "Закрепить"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(menuMessage.body);
+                  setMenu(null);
+                }}
+              >
+                Копировать
+              </button>
+            </div>
           </div>
+        </div>
+      ) : null}
+
+      {quotePicker ? (
+        <div className="chat-sheet" role="dialog" aria-modal="true" aria-label="Выбор цитаты">
           <button
             type="button"
-            onClick={() => void setPin(pinnedMessageId === menuMessage.id ? null : menuMessage.id)}
-          >
-            {pinnedMessageId === menuMessage.id ? "Открепить" : "Закрепить"}
-          </button>
-          <button
-            type="button"
+            className="chat-sheet__backdrop"
+            aria-label="Закрыть"
             onClick={() => {
-              void navigator.clipboard?.writeText(menuMessage.body);
-              setMenu(null);
+              setQuotePicker(null);
+              window.getSelection()?.removeAllRanges();
             }}
-          >
-            Копировать
-          </button>
+          />
+          <div className="chat-sheet__panel chat-sheet__panel--quote">
+            <div className="chat-sheet__handle" />
+            <h3 className="chat-sheet__title">Цитата</h3>
+            <p className="chat-sheet__hint">
+              Потяните синие маркеры, чтобы выбрать фрагмент. Можно сузить или расширить пальцами.
+            </p>
+            <div className="chat-quote-pick">
+              <p ref={quoteTextRef} className="chat-quote-pick__text">
+                {quotePicker.body}
+              </p>
+            </div>
+            <div className="chat-sheet__quote-actions">
+              <button type="button" className="chat-sheet__btn-secondary" onClick={() => confirmQuote(false)}>
+                Всё сообщение
+              </button>
+              <button type="button" className="chat-sheet__btn-primary" onClick={() => confirmQuote(true)}>
+                Цитировать выделенное
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -904,8 +997,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             aria-pressed={stickersOpen}
             onClick={() => {
               setStickersOpen((v) => !v);
-              setProfileOpen(false);
               setSearchOpen(false);
+              if (profileOpen) closeProfile();
             }}
           >
             <StickerIcon />
@@ -935,6 +1028,73 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           <SendIcon />
         </button>
       </form>
+
+      {profileOpen ? (
+        <div className="chat-profile-overlay" role="dialog" aria-modal="true" aria-label="Ваш профиль">
+          <button
+            type="button"
+            className="chat-profile-overlay__backdrop"
+            aria-label="Закрыть"
+            onClick={closeProfile}
+          />
+          <div className="chat-profile-sheet">
+            <div className="chat-profile-sheet__top">
+              <div>
+                <h2 className="chat-profile-sheet__title">Ваш профиль</h2>
+                <p className="chat-profile-sheet__hint">Имя и фото, как вас видят в чате</p>
+              </div>
+              <button type="button" className="chat-icon-btn" onClick={closeProfile} aria-label="Закрыть">
+                <CloseIcon />
+              </button>
+            </div>
+
+            <form onSubmit={saveProfile} className="chat-profile-sheet__form">
+              {profileError ? <p className="error-text">{profileError}</p> : null}
+
+              <label className="chat-profile-sheet__avatar">
+                <Avatar
+                  name={nameDraft || profile?.displayName || "Вы"}
+                  src={avatarPreview || profile?.avatarPath}
+                  size="xl"
+                />
+                <span className="chat-profile-sheet__avatar-badge" aria-hidden>
+                  Фото
+                </span>
+                <input
+                  name="avatar"
+                  type="file"
+                  accept="image/*"
+                  className="chat-profile-sheet__file"
+                  aria-label="Загрузить фото"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+                    setAvatarPreview(file ? URL.createObjectURL(file) : null);
+                  }}
+                />
+              </label>
+
+              <div className="field">
+                <label htmlFor="displayName">Имя в чате</label>
+                <input
+                  id="displayName"
+                  name="displayName"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  maxLength={40}
+                  required
+                  autoComplete="nickname"
+                  placeholder="Как вас зовут"
+                />
+              </div>
+
+              <button type="submit" className="chat-profile-sheet__save">
+                Сохранить
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
