@@ -3,18 +3,18 @@ import { prisma } from "@/lib/prisma";
 
 function configured() {
   return Boolean(
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
-      process.env.VAPID_PRIVATE_KEY &&
-      process.env.VAPID_SUBJECT,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() &&
+      process.env.VAPID_PRIVATE_KEY?.trim() &&
+      process.env.VAPID_SUBJECT?.trim(),
   );
 }
 
 function setup() {
   if (!configured()) return false;
   webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT!,
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
+    process.env.VAPID_SUBJECT!.trim(),
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!.trim(),
+    process.env.VAPID_PRIVATE_KEY!.trim(),
   );
   return true;
 }

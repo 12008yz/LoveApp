@@ -51,3 +51,14 @@ Expect: Postgres `accepting connections`, MinIO HTTP `200`, minio-init созд�
 | MinIO UI | 127.0.0.1:9001    |
 
 Do not open these in the firewall. pyBot on `:8088` is unrelated and stays as is.
+
+## Step 2 — App code + Node + systemd
+
+Preserve `deploy/.env` (Docker secrets) when uploading the repo over `/opt/loveApp`.
+
+1. Install Node 22 on VPS, upload app sources (see chat instructions).
+2. Create `/opt/loveApp/.env` from `deploy/env.app.example` (use passwords from `deploy/.env`).
+3. `bash deploy/setup-app.sh`
+4. `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/`
+
+Nginx cutover is step 3.

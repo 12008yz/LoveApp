@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "prisma generate && node scripts/bake-sqlite.mjs && next build --webpack && node scripts/copy-standalone-assets.mjs",
+    "build:prod": "prisma generate && next build --webpack",
     "start": "next start",
+    "start:prod": "next start --hostname 127.0.0.1 --port 3000",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

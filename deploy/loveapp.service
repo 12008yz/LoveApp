@@ -1,0 +1,17 @@
+[Unit]
+Description=LoveApp Next.js
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/loveApp
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/loveApp/.env
+ExecStart=/usr/bin/npm run start:prod
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

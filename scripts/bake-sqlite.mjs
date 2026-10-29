@@ -7,6 +7,17 @@ if (process.env.DEMO_MODE === "1" || process.env.DEMO_MODE === "true") {
   process.exit(0);
 }
 
+const dbUrl = process.env.DATABASE_URL || "";
+if (
+  process.env.SKIP_SQLITE_BAKE === "1" ||
+  process.env.SKIP_SQLITE_BAKE === "true" ||
+  dbUrl.startsWith("postgresql:") ||
+  dbUrl.startsWith("postgres:")
+) {
+  console.log("bake-sqlite: Postgres/SKIP_SQLITE_BAKE — skip sqlite bake");
+  process.exit(0);
+}
+
 const root = process.cwd();
 const dbPath = path.join(root, "prisma", "data.db");
 const url = `file:${dbPath.replace(/\\/g, "/")}`;

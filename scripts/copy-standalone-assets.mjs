@@ -19,6 +19,13 @@ if (existsSync(schemaSrc)) {
 
 const demoMode =
   process.env.DEMO_MODE === "1" || process.env.DEMO_MODE === "true";
+const dbUrl = process.env.DATABASE_URL || "";
+const skipSqlite =
+  demoMode ||
+  process.env.SKIP_SQLITE_BAKE === "1" ||
+  process.env.SKIP_SQLITE_BAKE === "true" ||
+  dbUrl.startsWith("postgresql:") ||
+  dbUrl.startsWith("postgres:");
 const dbCandidates = [
   path.join(root, "prisma", "data.db"),
   path.join(root, ".layero-assets", "data.db"),
@@ -27,11 +34,11 @@ const dbSrc = dbCandidates.find((p) => existsSync(p) && statSync(p).size > 1000)
 if (dbSrc) {
   cpSync(dbSrc, path.join(prismaDest, "data.db"));
   console.log(`copied ${dbSrc} -> standalone/prisma/data.db (${statSync(dbSrc).size} bytes)`);
-} else if (!demoMode) {
+} else if (!skipSqlite) {
   console.error("copy-standalone-assets: data.db not found");
   process.exit(1);
 } else {
-  console.log("copy-standalone-assets: DEMO_MODE — no sqlite file");
+  console.log("copy-standalone-assets: Postgres/DEMO — no sqlite file");
 }
 
 const engineName = "query-engine-linux-static-x64";
