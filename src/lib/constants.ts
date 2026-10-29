@@ -31,6 +31,10 @@ export const MORE_NAV = [
   { href: "/settings", label: "Настройки" },
 ] as const;
 
+/** Quick reactions for chat messages (one per user per message). */
+export const CHAT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"] as const;
+export type ChatReaction = (typeof CHAT_REACTIONS)[number];
+
 /** Quick sticker pack for chat (sent as plain message body). */
 export const CHAT_STICKERS = ["❤️", "🥰", "😘", "🤗", "✨", "🌙", "☕", "🌸", "🐻", "💌"] as const;
 

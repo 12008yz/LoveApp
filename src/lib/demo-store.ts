@@ -12,6 +12,7 @@ type Store = {
   couple: DemoRow[];
   coupleMember: DemoRow[];
   message: DemoRow[];
+  messageReaction: DemoRow[];
   diaryEntry: DemoRow[];
   event: DemoRow[];
   letter: DemoRow[];
@@ -44,6 +45,7 @@ function seed(): Store {
       passwordHash: "demo",
       avatarPath: null,
       createdAt: yesterday,
+      lastSeenAt: null,
     },
     {
       id: DEMO_PARTNER.id,
@@ -52,6 +54,7 @@ function seed(): Store {
       passwordHash: "demo",
       avatarPath: null,
       createdAt: yesterday,
+      lastSeenAt: null,
     },
   ];
 
@@ -62,6 +65,7 @@ function seed(): Store {
       status: "active",
       startedAt: yesterday,
       createdAt: yesterday,
+      pinnedMessageId: null,
     },
   ];
 
@@ -82,7 +86,7 @@ function seed(): Store {
     },
   ];
 
-  const message = [
+  const messageSeed = [
     {
       id: "demo-msg-0",
       coupleId: DEMO_COUPLE_ID,
@@ -132,6 +136,15 @@ function seed(): Store {
       readAt: null,
     },
   ];
+
+  // Every demo message carries the chat-upgrade fields (edit / reply / quote).
+  const message: DemoRow[] = messageSeed.map((m) => ({
+    ...m,
+    editedAt: null,
+    replyToId: null,
+    quoteText: null,
+    reactionsUpdatedAt: null,
+  }));
 
   const diaryEntry = [
     {
@@ -261,6 +274,7 @@ function seed(): Store {
     couple,
     coupleMember,
     message,
+    messageReaction: [],
     diaryEntry,
     event,
     letter,

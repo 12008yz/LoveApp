@@ -1,0 +1,371 @@
+﻿# Review package Task 1
+BASE: 2d90f8c (pre-task working tree)
+HEAD: working tree (no commits — user forbids commits)
+
+## Status
+ M prisma/schema.prisma  M src/lib/constants.ts  M src/lib/demo-prisma.ts  M src/lib/demo-store.ts ?? .superpowers/ ?? docs/superpowers/plans/2026-10-29-telegram-like-chat.md ?? docs/superpowers/specs/2026-10-29-telegram-like-chat-design.md ?? src/lib/chat-messages.test.ts ?? src/lib/chat-messages.ts ?? src/lib/chat-presence.test.ts ?? src/lib/chat-presence.ts ?? src/lib/chat-typing.test.ts ?? src/lib/chat-typing.ts
+
+## Diff stat
+ prisma/schema.prisma   | 33 ++++++++++++++++++++++++++++++---  src/lib/constants.ts   |  4 ++++  src/lib/demo-prisma.ts |  1 +  src/lib/demo-store.ts  | 15 ++++++++++++++-  4 files changed, 49 insertions(+), 4 deletions(-)
+
+?? .superpowers/sdd/progress.md ?? .superpowers/sdd/task-1-brief.md ?? .superpowers/sdd/task-1-green.txt ?? .superpowers/sdd/task-1-red.txt ?? .superpowers/sdd/task-1-report.md ?? docs/superpowers/plans/2026-10-29-telegram-like-chat.md ?? docs/superpowers/specs/2026-10-29-telegram-like-chat-design.md ?? src/lib/chat-messages.test.ts ?? src/lib/chat-messages.ts ?? src/lib/chat-presence.test.ts ?? src/lib/chat-presence.ts ?? src/lib/chat-typing.test.ts ?? src/lib/chat-typing.ts
+
+## Full diff (tracked)
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma index 40a958a..5f28599 100644 --- a/prisma/schema.prisma +++ b/prisma/schema.prisma @@ -19,9 +19,11 @@ model User {    displayName  String    avatarPath   String?    createdAt    DateTime @default(now()) +  lastSeenAt   DateTime?      membership         CoupleMember?    messages           Message[] +  reactions          MessageReaction[]    diaryEntries       DiaryEntry[]    events             Event[]    letters            Letter[]           @relation("LetterAuthor") @@ -55,9 +57,11 @@ model Couple {    status     String    @default("waiting") // waiting | active    startedAt  DateTime?    createdAt  DateTime  @default(now()) +  pinnedMessageId String?   +  pinnedMessage  Message?       @relation("CouplePin", fields: [pinnedMessageId], references: [id], onDelete: SetNull)    members        CoupleMember[] -  messages       Message[] +  messages       Message[]      @relation("CoupleMessages")    diaryEntries   DiaryEntry[]    events         Event[]    letters        Letter[] @@ -91,11 +95,34 @@ model Message {    body      String    readAt    DateTime?    createdAt DateTime @default(now()) +  editedAt  DateTime? +  replyToId String? +  quoteText String?   -  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade) -  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade) +  couple          Couple            @relation("CoupleMessages", fields: [coupleId], references: [id], onDelete: Cascade) +  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade) +  replyTo         Message?          @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull) +  replies         Message[]         @relation("MessageReply") +  reactions       MessageReaction[] +  pinnedByCouples Couple[]          @relation("CouplePin")      @@index([coupleId, createdAt]) +  @@index([coupleId, editedAt]) +} + +model MessageReaction { +  id        String   @id @default(cuid()) +  messageId String +  userId    String +  emoji     String +  createdAt DateTime @default(now()) +  updatedAt DateTime @updatedAt + +  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade) +  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade) + +  @@unique([messageId, userId]) +  @@index([updatedAt])  }    model DiaryEntry { diff --git a/src/lib/constants.ts b/src/lib/constants.ts index 324c0c5..be0488c 100644 --- a/src/lib/constants.ts +++ b/src/lib/constants.ts @@ -31,6 +31,10 @@ export const MORE_NAV = [    { href: "/settings", label: "╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨╕" },  ] as const;   +/** Quick reactions for chat messages (one per user per message). */ +export const CHAT_REACTIONS = ["тЭдя╕П", "ЁЯШВ", "ЁЯШо", "ЁЯШв", "ЁЯФе", "ЁЯСН"] as const; +export type ChatReaction = (typeof CHAT_REACTIONS)[number]; +  /** Quick sticker pack for chat (sent as plain message body). */  export const CHAT_STICKERS = ["тЭдя╕П", "ЁЯе░", "ЁЯШШ", "ЁЯдЧ", "тЬи", "ЁЯМЩ", "тШХ", "ЁЯМ╕", "ЁЯР╗", "ЁЯТМ"] as const;   diff --git a/src/lib/demo-prisma.ts b/src/lib/demo-prisma.ts index d3afcfe..30a866e 100644 --- a/src/lib/demo-prisma.ts +++ b/src/lib/demo-prisma.ts @@ -310,6 +310,7 @@ export function createDemoPrisma() {      "couple",      "coupleMember",      "message", +    "messageReaction",      "diaryEntry",      "event",      "letter", diff --git a/src/lib/demo-store.ts b/src/lib/demo-store.ts index 265109f..e8866fb 100644 --- a/src/lib/demo-store.ts +++ b/src/lib/demo-store.ts @@ -12,6 +12,7 @@ type Store = {    couple: DemoRow[];    coupleMember: DemoRow[];    message: DemoRow[]; +  messageReaction: DemoRow[];    diaryEntry: DemoRow[];    event: DemoRow[];    letter: DemoRow[]; @@ -44,6 +45,7 @@ function seed(): Store {        passwordHash: "demo",        avatarPath: null,        createdAt: yesterday, +      lastSeenAt: null,      },      {        id: DEMO_PARTNER.id, @@ -52,6 +54,7 @@ function seed(): Store {        passwordHash: "demo",        avatarPath: null,        createdAt: yesterday, +      lastSeenAt: null,      },    ];   @@ -62,6 +65,7 @@ function seed(): Store {        status: "active",        startedAt: yesterday,        createdAt: yesterday, +      pinnedMessageId: null,      },    ];   @@ -82,7 +86,7 @@ function seed(): Store {      },    ];   -  const message = [ +  const messageSeed = [      {        id: "demo-msg-0",        coupleId: DEMO_COUPLE_ID, @@ -133,6 +137,14 @@ function seed(): Store {      },    ];   +  // Every demo message carries the chat-upgrade fields (edit / reply / quote). +  const message: DemoRow[] = messageSeed.map((m) => ({ +    ...m, +    editedAt: null, +    replyToId: null, +    quoteText: null, +  })); +    const diaryEntry = [      {        id: "demo-diary-1", @@ -261,6 +273,7 @@ function seed(): Store {      couple,      coupleMember,      message, +    messageReaction: [],      diaryEntry,      event,      letter,
+
+## Untracked new files
+
+===== NEW FILE: src/lib/chat-messages.test.ts =====
+
+import { describe, expect, it } from "vitest";
+import { aggregateReactions, postMessageSchema } from "@/lib/chat-messages";
+
+describe("aggregateReactions", () => {
+  it("marks me and counts", () => {
+    const out = aggregateReactions(
+      [
+        { emoji: "вќ¤пёЏ", userId: "a" },
+        { emoji: "вќ¤пёЏ", userId: "b" },
+        { emoji: "рџ”Ґ", userId: "a" },
+      ],
+      "a",
+    );
+    expect(out).toEqual([
+      { emoji: "вќ¤пёЏ", count: 2, me: true },
+      { emoji: "рџ”Ґ", count: 1, me: true },
+    ]);
+  });
+});
+
+describe("postMessageSchema", () => {
+  it("rejects quote without replyToId", () => {
+    const r = postMessageSchema.safeParse({ body: "hi", quoteText: "x" });
+    expect(r.success).toBe(false);
+  });
+  it("accepts reply + quote", () => {
+    const r = postMessageSchema.safeParse({
+      body: "hi",
+      replyToId: "clxxxxxxxx",
+      quoteText: "part",
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+
+===== NEW FILE: src/lib/chat-messages.ts =====
+
+import { z } from "zod";
+import { CHAT_REACTIONS } from "@/lib/constants";
+
+export const postMessageSchema = z
+  .object({
+    body: z.string().min(1).max(4000),
+    replyToId: z.string().min(1).optional(),
+    quoteText: z.string().min(1).max(500).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.quoteText && !val.replyToId) {
+      ctx.addIssue({ code: "custom", message: "quote requires replyToId", path: ["quoteText"] });
+    }
+  });
+
+export const patchMessageSchema = z.object({
+  body: z.string().min(1).max(4000),
+});
+
+export const reactionSchema = z.object({
+  emoji: z.enum(CHAT_REACTIONS as unknown as [string, ...string[]]),
+});
+
+export type AggregatedReaction = { emoji: string; count: number; me: boolean };
+
+/** Group reaction rows by emoji (first-seen order), flagging the viewer's own. */
+export function aggregateReactions(
+  rows: { emoji: string; userId: string }[],
+  me: string,
+): AggregatedReaction[] {
+  const map = new Map<string, AggregatedReaction>();
+  for (const row of rows) {
+    const cur = map.get(row.emoji) ?? { emoji: row.emoji, count: 0, me: false };
+    cur.count += 1;
+    if (row.userId === me) cur.me = true;
+    map.set(row.emoji, cur);
+  }
+  return [...map.values()];
+}
+
+/** Prisma include used everywhere a message is read for the chat API. */
+export const MESSAGE_INCLUDE = {
+  author: { select: { id: true, displayName: true, avatarPath: true } },
+  replyTo: {
+    select: {
+      id: true,
+      body: true,
+      authorId: true,
+      author: { select: { id: true, displayName: true } },
+    },
+  },
+  reactions: { select: { emoji: true, userId: true } },
+} as const;
+
+export type MessageDto = {
+  id: string;
+  coupleId: string;
+  authorId: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+  editedAt: string | null;
+  replyToId: string | null;
+  quoteText: string | null;
+  author: { id: string; displayName: string; avatarPath: string | null };
+  replyTo: {
+    id: string;
+    body: string;
+    authorId: string;
+    authorName: string;
+  } | null;
+  reactions: AggregatedReaction[];
+};
+
+type DateLike = Date | string | null | undefined;
+
+/** Structural shape of a message loaded with MESSAGE_INCLUDE. */
+export type MessageWithRelations = {
+  id: string;
+  coupleId: string;
+  authorId: string;
+  body: string;
+  readAt?: DateLike;
+  createdAt: Date | string;
+  editedAt?: DateLike;
+  replyToId?: string | null;
+  quoteText?: string | null;
+  author: { id: string; displayName: string; avatarPath: string | null };
+  replyTo?: {
+    id: string;
+    body: string;
+    authorId: string;
+    author?: { id: string; displayName: string } | null;
+  } | null;
+  reactions?: { emoji: string; userId: string }[] | null;
+};
+
+function iso(value: DateLike): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+export function toMessageDto(message: MessageWithRelations, me: string): MessageDto {
+  return {
+    id: message.id,
+    coupleId: message.coupleId,
+    authorId: message.authorId,
+    body: message.body,
+    readAt: iso(message.readAt),
+    createdAt: iso(message.createdAt) as string,
+    editedAt: iso(message.editedAt),
+    replyToId: message.replyToId ?? null,
+    quoteText: message.quoteText ?? null,
+    author: {
+      id: message.author.id,
+      displayName: message.author.displayName,
+      avatarPath: message.author.avatarPath ?? null,
+    },
+    replyTo: message.replyTo
+      ? {
+          id: message.replyTo.id,
+          body: message.replyTo.body,
+          authorId: message.replyTo.authorId,
+          authorName: message.replyTo.author?.displayName ?? "",
+        }
+      : null,
+    reactions: aggregateReactions(message.reactions ?? [], me),
+  };
+}
+
+
+===== NEW FILE: src/lib/chat-presence.test.ts =====
+
+import { describe, expect, it } from "vitest";
+import { formatLastSeen, isOnline, ONLINE_MS } from "@/lib/chat-presence";
+
+describe("isOnline", () => {
+  it("true within 45s", () => {
+    const now = new Date("2026-10-29T12:00:00Z");
+    expect(isOnline(new Date(now.getTime() - 10_000), now)).toBe(true);
+  });
+  it("false after 45s", () => {
+    const now = new Date("2026-10-29T12:00:00Z");
+    expect(isOnline(new Date(now.getTime() - ONLINE_MS - 1), now)).toBe(false);
+  });
+  it("false when null", () => {
+    expect(isOnline(null)).toBe(false);
+  });
+});
+
+describe("formatLastSeen", () => {
+  it("uses Р±С‹Р» for boy when offline", () => {
+    const now = new Date("2026-10-29T12:00:00Z");
+    const at = new Date(now.getTime() - 5 * 60_000);
+    expect(formatLastSeen(at, "boy", now)).toMatch(/Р±С‹Р»/i);
+  });
+  it("uses Р±С‹Р»Р° for girl", () => {
+    const now = new Date("2026-10-29T12:00:00Z");
+    const at = new Date(now.getTime() - 5 * 60_000);
+    expect(formatLastSeen(at, "girl", now)).toMatch(/Р±С‹Р»Р°/i);
+  });
+});
+
+
+===== NEW FILE: src/lib/chat-presence.ts =====
+
+/** A user counts as online if seen within this window. */
+export const ONLINE_MS = 45_000;
+
+type SeenAt = Date | string | null | undefined;
+
+function toDate(value: SeenAt): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function isOnline(lastSeenAt: SeenAt, now: Date = new Date()): boolean {
+  const at = toDate(lastSeenAt);
+  if (!at) return false;
+  return now.getTime() - at.getTime() <= ONLINE_MS;
+}
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function hhmm(d: Date) {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function sameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Telegram-style presence line, gendered by couple role ("Р±С‹Р»" / "Р±С‹Р»Р°"). */
+export function formatLastSeen(
+  lastSeenAt: SeenAt,
+  genderRole: "boy" | "girl" | string,
+  now: Date = new Date(),
+): string {
+  const at = toDate(lastSeenAt);
+  if (!at) return "РґР°РІРЅРѕ РЅРµ Р·Р°С…РѕРґРёР»" + (genderRole === "girl" ? "Р°" : "");
+  if (isOnline(at, now)) return "РІ СЃРµС‚Рё";
+
+  const verb = genderRole === "girl" ? "Р±С‹Р»Р°" : "Р±С‹Р»";
+  const diffMs = now.getTime() - at.getTime();
+  const minutes = Math.floor(diffMs / 60_000);
+
+  if (minutes < 1) return `${verb} С‚РѕР»СЊРєРѕ С‡С‚Рѕ`;
+  if (minutes < 60) return `${verb} ${minutes} РјРёРЅ. РЅР°Р·Р°Рґ`;
+
+  if (sameDay(at, now)) return `${verb} СЃРµРіРѕРґРЅСЏ РІ ${hhmm(at)}`;
+
+  const yesterday = new Date(now.getTime() - 86_400_000);
+  if (sameDay(at, yesterday)) return `${verb} РІС‡РµСЂР° РІ ${hhmm(at)}`;
+
+  return `${verb} ${pad(at.getDate())}.${pad(at.getMonth() + 1)} РІ ${hhmm(at)}`;
+}
+
+
+===== NEW FILE: src/lib/chat-typing.test.ts =====
+
+import { describe, expect, it, beforeEach, vi } from "vitest";
+import { setTyping, clearTyping, getPartnerTyping, _resetTypingForTests } from "@/lib/chat-typing";
+
+beforeEach(() => _resetTypingForTests());
+
+describe("chat-typing", () => {
+  it("returns partner when fresh", () => {
+    setTyping("c1", "u2");
+    expect(getPartnerTyping("c1", "u1")?.userId).toBe("u2");
+  });
+  it("ignores self", () => {
+    setTyping("c1", "u1");
+    expect(getPartnerTyping("c1", "u1")).toBeNull();
+  });
+  it("expires after TTL", () => {
+    vi.useFakeTimers();
+    setTyping("c1", "u2");
+    vi.advanceTimersByTime(3001);
+    expect(getPartnerTyping("c1", "u1")).toBeNull();
+    vi.useRealTimers();
+  });
+  it("clearTyping removes", () => {
+    setTyping("c1", "u2");
+    clearTyping("c1", "u2");
+    expect(getPartnerTyping("c1", "u1")).toBeNull();
+  });
+});
+
+
+===== NEW FILE: src/lib/chat-typing.ts =====
+
+/**
+ * In-memory "partner is typing" state, keyed by couple.
+ * Single-process only (like demo store); entries expire after TYPING_TTL_MS.
+ */
+export const TYPING_TTL_MS = 3000;
+
+type Entry = { userId: string; at: number };
+
+declare global {
+  var __loveTyping: Map<string, Map<string, Entry>> | undefined;
+}
+
+function store() {
+  if (!globalThis.__loveTyping) globalThis.__loveTyping = new Map();
+  return globalThis.__loveTyping;
+}
+
+export function setTyping(coupleId: string, userId: string): void {
+  const s = store();
+  let couple = s.get(coupleId);
+  if (!couple) {
+    couple = new Map();
+    s.set(coupleId, couple);
+  }
+  couple.set(userId, { userId, at: Date.now() });
+}
+
+export function clearTyping(coupleId: string, userId: string): void {
+  const couple = store().get(coupleId);
+  if (!couple) return;
+  couple.delete(userId);
+  if (couple.size === 0) store().delete(coupleId);
+}
+
+export function getPartnerTyping(
+  coupleId: string,
+  selfId: string,
+): { userId: string } | null {
+  const couple = store().get(coupleId);
+  if (!couple) return null;
+  const now = Date.now();
+  for (const [uid, entry] of couple) {
+    if (now - entry.at > TYPING_TTL_MS) {
+      couple.delete(uid);
+      continue;
+    }
+    if (uid !== selfId) return { userId: uid };
+  }
+  if (couple.size === 0) store().delete(coupleId);
+  return null;
+}
+
+export function _resetTypingForTests(): void {
+  store().clear();
+}
+

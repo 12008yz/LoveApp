@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
+import { MESSAGE_INCLUDE, aggregateReactions, toMessageDto } from "@/lib/chat-messages";
+import { getPartnerTyping } from "@/lib/chat-typing";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +10,18 @@ export async function GET(req: Request) {
   if ("error" in authResult) return authResult.error;
 
   const { couple, user } = authResult;
+  const partnerMember = couple.members.find((m) => m.userId !== user.id);
+  const partnerId = partnerMember?.userId;
+
   const encoder = new TextEncoder();
   let lastCheck = new Date();
   let lastReadCheck = new Date();
+  let lastEditCheck = new Date();
+  let lastReactionCheck = new Date();
+  let lastReactionsBump = new Date();
+  let lastPin: string | null | undefined = undefined;
+  let lastPartnerSeen: string | null | undefined = undefined;
+  let lastTypingActive = false;
   let closed = false;
 
   const stream = new ReadableStream({
@@ -28,19 +39,23 @@ export async function GET(req: Request) {
           return;
         }
         try {
+          let emitted = false;
+
           const messages = await prisma.message.findMany({
             where: {
               coupleId: couple.id,
               createdAt: { gt: lastCheck },
             },
             orderBy: { createdAt: "asc" },
-            include: {
-              author: { select: { id: true, displayName: true, avatarPath: true } },
-            },
+            include: MESSAGE_INCLUDE,
           });
           if (messages.length) {
             lastCheck = messages[messages.length - 1].createdAt;
-            send({ type: "messages", messages });
+            send({
+              type: "messages",
+              messages: messages.map((m) => toMessageDto(m, user.id)),
+            });
+            emitted = true;
             await prisma.message.updateMany({
               where: {
                 coupleId: couple.id,
@@ -51,7 +66,24 @@ export async function GET(req: Request) {
             });
           }
 
-          // Partner marked our messages read — push ✓✓ updates
+          const edits = await prisma.message.findMany({
+            where: {
+              coupleId: couple.id,
+              editedAt: { gt: lastEditCheck, not: null },
+            },
+            orderBy: { editedAt: "asc" },
+            include: MESSAGE_INCLUDE,
+          });
+          if (edits.length) {
+            const last = edits[edits.length - 1]?.editedAt;
+            if (last) lastEditCheck = last;
+            send({
+              type: "message_updated",
+              messages: edits.map((m) => toMessageDto(m, user.id)),
+            });
+            emitted = true;
+          }
+
           const reads = await prisma.message.findMany({
             where: {
               coupleId: couple.id,
@@ -65,11 +97,88 @@ export async function GET(req: Request) {
             const last = reads[reads.length - 1]?.readAt;
             if (last) lastReadCheck = last;
             send({ type: "reads", reads });
+            emitted = true;
           }
 
-          if (!messages.length && !reads.length) {
-            send({ type: "ping" });
+          const reactionRows = await prisma.messageReaction.findMany({
+            where: {
+              updatedAt: { gt: lastReactionCheck },
+              message: { coupleId: couple.id },
+            },
+            orderBy: { updatedAt: "asc" },
+            select: { messageId: true, updatedAt: true },
+          });
+          const bumped = await prisma.message.findMany({
+            where: {
+              coupleId: couple.id,
+              reactionsUpdatedAt: { gt: lastReactionsBump, not: null },
+            },
+            orderBy: { reactionsUpdatedAt: "asc" },
+            select: { id: true, reactionsUpdatedAt: true },
+          });
+          const reactionIds = new Set<string>([
+            ...reactionRows.map((r) => r.messageId),
+            ...bumped.map((m) => m.id),
+          ]);
+          if (reactionRows.length) {
+            lastReactionCheck = reactionRows[reactionRows.length - 1].updatedAt;
           }
+          if (bumped.length) {
+            const last = bumped[bumped.length - 1]?.reactionsUpdatedAt;
+            if (last) lastReactionsBump = last;
+          }
+          if (reactionIds.size) {
+            for (const messageId of reactionIds) {
+              const rows = await prisma.messageReaction.findMany({
+                where: { messageId },
+                select: { emoji: true, userId: true },
+              });
+              send({
+                type: "reaction",
+                messageId,
+                reactions: aggregateReactions(rows, user.id),
+              });
+            }
+            emitted = true;
+          }
+
+          const coupleRow = await prisma.couple.findUnique({
+            where: { id: couple.id },
+            select: { pinnedMessageId: true },
+          });
+          const pinId = coupleRow?.pinnedMessageId ?? null;
+          if (lastPin === undefined || lastPin !== pinId) {
+            lastPin = pinId;
+            send({ type: "pin", messageId: pinId });
+            emitted = true;
+          }
+
+          if (partnerId) {
+            const partner = await prisma.user.findUnique({
+              where: { id: partnerId },
+              select: { lastSeenAt: true },
+            });
+            const seen = partner?.lastSeenAt?.toISOString() ?? null;
+            if (lastPartnerSeen === undefined || lastPartnerSeen !== seen) {
+              lastPartnerSeen = seen;
+              send({ type: "presence", userId: partnerId, lastSeenAt: seen });
+              emitted = true;
+            }
+
+            const typing = getPartnerTyping(couple.id, user.id);
+            const active = Boolean(typing);
+            if (active !== lastTypingActive) {
+              lastTypingActive = active;
+              send({
+                type: "typing",
+                userId: typing?.userId ?? partnerId,
+                active,
+              });
+              emitted = true;
+            }
+          }
+
+          if (!emitted) send({ type: "ping" });
         } catch {
           // keep stream alive
         }

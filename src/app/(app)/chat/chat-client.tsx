@@ -1,16 +1,26 @@
 "use client";
 
-import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSession } from "next-auth/react";
-import { CHAT_STICKERS } from "@/lib/constants";
+import { CHAT_REACTIONS, CHAT_STICKERS } from "@/lib/constants";
+import { formatLastSeen, isOnline } from "@/lib/chat-presence";
+import type { AggregatedReaction, MessageDto } from "@/lib/chat-messages";
 
-type Message = {
+type Partner = {
   id: string;
-  body: string;
-  createdAt: string;
-  readAt: string | null;
-  authorId: string;
-  author: { id: string; displayName: string; avatarPath?: string | null };
+  displayName: string;
+  avatarPath: string | null;
+  genderRole: string;
+  lastSeenAt: string | null;
 };
 
 type Person = {
@@ -19,7 +29,10 @@ type Person = {
   avatarPath: string | null;
 };
 
-const GROUP_GAP_MS = 5 * 60 * 1000;
+type MenuState = { messageId: string; x: number; y: number } | null;
+
+const GROUP_GAP_MS = 5 * 60_000;
+const LONG_PRESS_MS = 420;
 
 function Avatar({
   name,
@@ -67,7 +80,7 @@ function sameDay(a: string, b: string) {
 }
 
 function isStickerBody(body: string) {
-  return body.length <= 3 && /\p{Extended_Pictographic}/u.test(body);
+  return body.length <= 8 && /\p{Extended_Pictographic}/u.test(body) && !/\n/.test(body);
 }
 
 function ChatSvgIcon({ children }: { children: ReactNode }) {
@@ -124,18 +137,27 @@ function CloseIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <ChatSvgIcon>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 3.5 3.5" />
+    </ChatSvgIcon>
+  );
+}
+
 type Row =
   | { kind: "day"; key: string; label: string }
   | {
       kind: "msg";
       key: string;
-      message: Message;
+      message: MessageDto;
       mine: boolean;
       firstInGroup: boolean;
       lastInGroup: boolean;
     };
 
-function buildRows(messages: Message[], me: string | undefined): Row[] {
+function buildRows(messages: MessageDto[], me: string | undefined): Row[] {
   const rows: Row[] = [];
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
@@ -170,28 +192,98 @@ function buildRows(messages: Message[], me: string | undefined): Row[] {
   return rows;
 }
 
-export function ChatClient() {
+function mergeById(prev: MessageDto[], incoming: MessageDto[]) {
+  const map = new Map(prev.map((m) => [m.id, m]));
+  for (const m of incoming) map.set(m.id, m);
+  return [...map.values()].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+}
+
+export function ChatClient({ partner }: { partner: Partner | null }) {
   const { data, update } = useSession();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<MessageDto[]>([]);
+  const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
+  const [pinnedPreview, setPinnedPreview] = useState<{
+    id: string;
+    body: string;
+    authorName: string;
+  } | null>(null);
   const [text, setText] = useState("");
   const [profile, setProfile] = useState<Person | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchHits, setSearchHits] = useState<MessageDto[]>([]);
+  const [searchNote, setSearchNote] = useState("");
   const [profileError, setProfileError] = useState("");
   const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
+  const [quoteText, setQuoteText] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<MenuState>(null);
+  const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
-  // Prefer session; fall back to profile so bubbles don't flip sides while session loads
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const me = data?.user?.id || profile?.id;
   const rows = useMemo(() => buildRows(messages, me), [messages, me]);
+  const pinnedFromList = pinnedMessageId
+    ? messages.find((m) => m.id === pinnedMessageId)
+    : null;
+  const pinnedBar =
+    pinnedFromList
+      ? { id: pinnedFromList.id, body: pinnedFromList.body }
+      : pinnedMessageId && pinnedPreview?.id === pinnedMessageId
+        ? { id: pinnedPreview.id, body: pinnedPreview.body }
+        : null;
+
+  const subtitle = useMemo(() => {
+    if (!partner) return "";
+    if (partnerTyping) return "печатает…";
+    if (isOnline(partnerSeen)) return "в сети";
+    return formatLastSeen(partnerSeen, partner.genderRole);
+    // tick refreshes relative time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partner, partnerSeen, partnerTyping, tick]);
+
+  const scrollToMessage = useCallback((id: string) => {
+    const el = logRef.current?.querySelector(`[data-message-id="${id}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightId(id);
+      window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1600);
+      return true;
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       const res = await fetch("/api/messages");
       const json = await res.json();
-      if (!cancelled) setMessages(json.messages || []);
+      if (!cancelled) {
+        setMessages(json.messages || []);
+        setPinnedMessageId(json.pinnedMessageId ?? null);
+        setPinnedPreview(json.pinnedPreview ?? null);
+      }
     }
     async function loadProfile() {
       const res = await fetch("/api/profile");
@@ -209,14 +301,10 @@ export function ChatClient() {
       try {
         const payload = JSON.parse(ev.data);
         if (payload.type === "messages" && payload.messages?.length) {
-          setMessages((prev) => {
-            const ids = new Set(prev.map((m) => m.id));
-            const next = [...prev];
-            for (const m of payload.messages as Message[]) {
-              if (!ids.has(m.id)) next.push(m);
-            }
-            return next;
-          });
+          setMessages((prev) => mergeById(prev, payload.messages as MessageDto[]));
+        }
+        if (payload.type === "message_updated" && payload.messages?.length) {
+          setMessages((prev) => mergeById(prev, payload.messages as MessageDto[]));
         }
         if (payload.type === "reads" && payload.reads?.length) {
           const readMap = new Map(
@@ -229,6 +317,26 @@ export function ChatClient() {
             }),
           );
         }
+        if (payload.type === "reaction" && payload.messageId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.messageId
+                ? { ...m, reactions: payload.reactions as AggregatedReaction[] }
+                : m,
+            ),
+          );
+        }
+        if (payload.type === "pin") {
+          const id = (payload.messageId as string | null) ?? null;
+          setPinnedMessageId(id);
+          if (!id) setPinnedPreview(null);
+        }
+        if (payload.type === "presence" && partner && payload.userId === partner.id) {
+          setPartnerSeen(payload.lastSeenAt ?? null);
+        }
+        if (payload.type === "typing" && partner) {
+          setPartnerTyping(Boolean(payload.active));
+        }
       } catch {
         /* ignore */
       }
@@ -237,39 +345,108 @@ export function ChatClient() {
       cancelled = true;
       es.close();
     };
+  }, [partner]);
+
+  useEffect(() => {
+    function beat() {
+      if (document.visibilityState !== "visible") return;
+      void fetch("/api/chat/presence", { method: "POST" });
+    }
+    beat();
+    const id = window.setInterval(beat, 25_000);
+    document.addEventListener("visibilitychange", beat);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", beat);
+    };
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, stickersOpen]);
+  }, [messages.length, stickersOpen]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
+  }, [text]);
+
+  function clearComposerExtras() {
+    setReplyTo(null);
+    setQuoteText(null);
+    setEditingId(null);
+  }
+
+  function scheduleTyping() {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => {
+      void fetch("/api/chat/typing", { method: "POST" });
+    }, 1000);
+  }
 
   async function sendBody(body: string) {
     const trimmed = body.trim();
     if (!trimmed || sending) return;
     setSending(true);
+    setError(null);
     try {
+      if (editingId) {
+        const res = await fetch(`/api/messages/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: trimmed }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Не удалось изменить");
+        if (json.message) {
+          setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
+        }
+        clearComposerExtras();
+        setText("");
+        return;
+      }
+
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: trimmed }),
+        body: JSON.stringify({
+          body: trimmed,
+          replyToId: replyTo?.id,
+          quoteText: quoteText || undefined,
+        }),
       });
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось отправить");
       if (json.message) {
-        setMessages((prev) =>
-          prev.some((m) => m.id === json.message.id) ? prev : [...prev, json.message],
-        );
+        setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
       }
+      setText("");
+      // After send (including sticker-as-reply), clear reply/edit chrome like Telegram.
+      clearComposerExtras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка");
     } finally {
       setSending(false);
+      setStickersOpen(false);
     }
   }
 
   async function send(e: FormEvent) {
     e.preventDefault();
     const body = text;
-    setText("");
-    setStickersOpen(false);
     await sendBody(body);
+  }
+
+  function onComposerKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void sendBody(text);
+    }
+    if (e.key === "Escape" && (editingId || replyTo)) {
+      clearComposerExtras();
+      setText("");
+    }
   }
 
   async function saveProfile(e: FormEvent<HTMLFormElement>) {
@@ -288,12 +465,209 @@ export function ChatClient() {
     try {
       await update({ name: json.user.displayName });
     } catch {
-      /* session update optional */
+      /* optional */
     }
   }
 
+  async function toggleReaction(messageId: string, emoji: string) {
+    setMenu(null);
+    const res = await fetch(`/api/messages/${messageId}/reactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Реакция не сохранилась");
+      return;
+    }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, reactions: json.reactions as AggregatedReaction[] } : m,
+      ),
+    );
+  }
+
+  async function setPin(messageId: string | null) {
+    setMenu(null);
+    const res = await fetch("/api/chat/pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Не удалось закрепить");
+      return;
+    }
+    const id = (json.messageId as string | null) ?? null;
+    setPinnedMessageId(id);
+    if (!id) {
+      setPinnedPreview(null);
+    } else {
+      const m = messages.find((x) => x.id === id);
+      if (m) setPinnedPreview({ id: m.id, body: m.body, authorName: m.author.displayName });
+    }
+  }
+
+  async function runSearch(q: string) {
+    setSearchQ(q);
+    setSearchNote("");
+    if (!q.trim()) {
+      setSearchHits([]);
+      return;
+    }
+    const res = await fetch(`/api/messages/search?q=${encodeURIComponent(q.trim())}`);
+    const json = await res.json();
+    setSearchHits(json.messages || []);
+  }
+
+  function openReply(m: MessageDto, quote?: string | null) {
+    setMenu(null);
+    setEditingId(null);
+    setReplyTo(m);
+    setQuoteText(quote?.trim() || null);
+    textareaRef.current?.focus();
+  }
+
+  function openEdit(m: MessageDto) {
+    setMenu(null);
+    setReplyTo(null);
+    setQuoteText(null);
+    setEditingId(m.id);
+    setText(m.body);
+    textareaRef.current?.focus();
+  }
+
+  function selectionQuoteFor(messageId: string): string | null {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return null;
+    const textSel = sel.toString().trim();
+    if (!textSel) return null;
+    const node = sel.anchorNode;
+    const el = node instanceof Element ? node : node?.parentElement;
+    if (!el?.closest(`[data-message-id="${messageId}"]`)) return null;
+    return textSel.slice(0, 500);
+  }
+
+  function startPress(messageId: string, clientX: number, clientY: number) {
+    pressStart.current = { x: clientX, y: clientY };
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = setTimeout(() => {
+      setMenu({ messageId, x: clientX, y: clientY });
+      pressTimer.current = null;
+    }, LONG_PRESS_MS);
+  }
+
+  function movePress(clientX: number, clientY: number) {
+    if (!pressStart.current || !pressTimer.current) return;
+    const dx = Math.abs(clientX - pressStart.current.x);
+    const dy = Math.abs(clientY - pressStart.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function endPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  }
+
+  const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
+
   return (
     <div className="chat-page">
+      {partner ? (
+        <header className="chat-header">
+          <Avatar name={partner.displayName} src={partner.avatarPath} size="md" />
+          <div className="chat-header__meta">
+            <strong>{partner.displayName}</strong>
+            <span className="chat-header__status">{subtitle}</span>
+          </div>
+          <button
+            type="button"
+            className={searchOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+            aria-label="Поиск"
+            onClick={() => {
+              setSearchOpen((v) => !v);
+              setStickersOpen(false);
+              setProfileOpen(false);
+            }}
+          >
+            <SearchIcon />
+          </button>
+          <button
+            type="button"
+            className={profileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+            aria-label="Ваш профиль"
+            onClick={() => {
+              setProfileOpen((v) => !v);
+              setStickersOpen(false);
+              setSearchOpen(false);
+            }}
+          >
+            <ProfileIcon />
+          </button>
+        </header>
+      ) : null}
+
+      {pinnedBar ? (
+        <div className="chat-pin-bar">
+          <button
+            type="button"
+            className="chat-pin-bar__body"
+            onClick={() => {
+              if (!scrollToMessage(pinnedBar.id)) {
+                setError("Закреплённое сообщение вне загруженной истории");
+              }
+            }}
+          >
+            <span className="chat-pin-bar__label">Закреплено</span>
+            <span className="chat-pin-bar__text">{pinnedBar.body}</span>
+          </button>
+          <button type="button" className="chat-icon-btn" aria-label="Открепить" onClick={() => void setPin(null)}>
+            <CloseIcon />
+          </button>
+        </div>
+      ) : null}
+
+      {searchOpen ? (
+        <div className="chat-search">
+          <input
+            className="chat-search__input"
+            value={searchQ}
+            onChange={(e) => void runSearch(e.target.value)}
+            placeholder="Поиск по сообщениям…"
+            autoFocus
+          />
+          {searchNote ? <p className="meta">{searchNote}</p> : null}
+          <div className="chat-search__hits">
+            {searchHits.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="chat-search__hit"
+                onClick={() => {
+                  if (!scrollToMessage(m.id)) {
+                    setSearchNote("Сообщение вне загруженной истории");
+                  } else {
+                    setSearchNote("");
+                    setSearchOpen(false);
+                  }
+                }}
+              >
+                <span className="meta">{m.author.displayName}</span>
+                <span>{m.body}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {profileOpen ? (
         <div className="chat-profile-sheet" role="dialog" aria-label="Ваш профиль">
           <div className="chat-profile-sheet__head">
@@ -339,7 +713,7 @@ export function ChatClient() {
         </div>
       ) : null}
 
-      <div className="chat-log">
+      <div className="chat-log" ref={logRef} onClick={() => setMenu(null)}>
         {messages.length === 0 ? (
           <p className="chat-empty">Напишите первое сообщение любимому человеку.</p>
         ) : null}
@@ -356,11 +730,13 @@ export function ChatClient() {
           return (
             <div
               key={row.key}
+              data-message-id={m.id}
               className={[
                 "chat-row",
                 mine ? "chat-row--mine" : "chat-row--theirs",
                 firstInGroup ? "chat-row--first" : "",
                 lastInGroup ? "chat-row--last" : "chat-row--grouped",
+                highlightId === m.id ? "chat-row--flash" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -372,41 +748,121 @@ export function ChatClient() {
                   ) : null}
                 </div>
               ) : null}
-              <div
-                className={[
-                  "chat-bubble",
-                  mine ? "chat-bubble--mine" : "chat-bubble--theirs",
-                  lastInGroup ? "chat-bubble--tail" : "",
-                  sticker ? "chat-bubble--sticker" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
-                  {m.body}
-                </span>
-                <span className="chat-bubble__meta">
-                  <time dateTime={m.createdAt}>
-                    {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
-                  {mine ? (
-                    <span
-                      className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
-                      aria-label={m.readAt ? "Прочитано" : "Отправлено"}
-                    >
-                      {m.readAt ? "✓✓" : "✓"}
-                    </span>
-                  ) : null}
-                </span>
+              <div className="chat-bubble-wrap">
+                {m.replyTo ? (
+                  <button
+                    type="button"
+                    className="chat-reply-chip"
+                    onClick={() => scrollToMessage(m.replyTo!.id)}
+                  >
+                    <strong>{m.replyTo.author.displayName}</strong>
+                    <span>{m.quoteText || m.replyTo.body}</span>
+                  </button>
+                ) : null}
+                <div
+                  className={[
+                    "chat-bubble",
+                    mine ? "chat-bubble--mine" : "chat-bubble--theirs",
+                    lastInGroup ? "chat-bubble--tail" : "",
+                    sticker ? "chat-bubble--sticker" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ messageId: m.id, x: e.clientX, y: e.clientY });
+                  }}
+                  onPointerDown={(e) => {
+                    if (e.pointerType === "mouse" && e.button !== 0) return;
+                    startPress(m.id, e.clientX, e.clientY);
+                  }}
+                  onPointerMove={(e) => movePress(e.clientX, e.clientY)}
+                  onPointerUp={endPress}
+                  onPointerCancel={endPress}
+                >
+                  <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
+                    {m.body}
+                  </span>
+                  <span className="chat-bubble__meta">
+                    {m.editedAt ? <span className="chat-edited">изм.</span> : null}
+                    <time dateTime={m.createdAt}>
+                      {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                    {mine ? (
+                      <span
+                        className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
+                        aria-label={m.readAt ? "Прочитано" : "Отправлено"}
+                      >
+                        {m.readAt ? "✓✓" : "✓"}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+                {m.reactions?.length ? (
+                  <div className={`chat-reactions ${mine ? "chat-reactions--mine" : ""}`}>
+                    {m.reactions.map((r) => (
+                      <button
+                        key={r.emoji}
+                        type="button"
+                        className={r.me ? "chat-reactions__btn is-me" : "chat-reactions__btn"}
+                        onClick={() => void toggleReaction(m.id, r.emoji)}
+                      >
+                        {r.emoji}
+                        {r.count > 1 ? <span>{r.count}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           );
         })}
         <div ref={bottomRef} />
       </div>
+
+      {menu && menuMessage ? (
+        <div className="chat-menu" style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 280) }}>
+          <button type="button" onClick={() => openReply(menuMessage)}>
+            Ответить
+          </button>
+          <button
+            type="button"
+            onClick={() => openReply(menuMessage, selectionQuoteFor(menuMessage.id))}
+          >
+            Цитировать
+          </button>
+          {menuMessage.authorId === me ? (
+            <button type="button" onClick={() => openEdit(menuMessage)}>
+              Изменить
+            </button>
+          ) : null}
+          <div className="chat-menu__reactions">
+            {CHAT_REACTIONS.map((emoji) => (
+              <button key={emoji} type="button" onClick={() => void toggleReaction(menuMessage.id, emoji)}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void setPin(pinnedMessageId === menuMessage.id ? null : menuMessage.id)}
+          >
+            {pinnedMessageId === menuMessage.id ? "Открепить" : "Закрепить"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(menuMessage.body);
+              setMenu(null);
+            }}
+          >
+            Копировать
+          </button>
+        </div>
+      ) : null}
 
       {stickersOpen ? (
         <div className="chat-stickers" aria-label="Стикеры">
@@ -415,16 +871,27 @@ export function ChatClient() {
               key={sticker}
               type="button"
               className="chat-stickers__btn"
-              onClick={() => {
-                void sendBody(sticker);
-                setStickersOpen(false);
-              }}
+              onClick={() => void sendBody(sticker)}
             >
               {sticker}
             </button>
           ))}
         </div>
       ) : null}
+
+      {(replyTo || editingId) && (
+        <div className="chat-composer-bar">
+          <div className="chat-composer-bar__text">
+            <strong>{editingId ? "Редактирование" : `Ответ · ${replyTo?.author.displayName}`}</strong>
+            <span>{editingId ? text.slice(0, 80) : quoteText || replyTo?.body}</span>
+          </div>
+          <button type="button" className="chat-icon-btn" aria-label="Отмена" onClick={clearComposerExtras}>
+            <CloseIcon />
+          </button>
+        </div>
+      )}
+
+      {error ? <p className="chat-error">{error}</p> : null}
 
       <form className="chat-composer" onSubmit={send}>
         <button
@@ -435,31 +902,26 @@ export function ChatClient() {
           onClick={() => {
             setStickersOpen((v) => !v);
             setProfileOpen(false);
+            setSearchOpen(false);
           }}
         >
           <StickerIcon />
         </button>
-        <input
+        <textarea
+          ref={textareaRef}
           className="chat-composer__input"
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Сообщение…"
+          onChange={(e) => {
+            setText(e.target.value);
+            if (e.target.value.trim()) scheduleTyping();
+          }}
+          onKeyDown={onComposerKey}
+          placeholder={editingId ? "Изменить сообщение…" : "Сообщение…"}
           maxLength={4000}
+          rows={1}
           enterKeyHint="send"
           autoComplete="off"
         />
-        <button
-          type="button"
-          className={profileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
-          aria-label="Ваш профиль"
-          aria-pressed={profileOpen}
-          onClick={() => {
-            setProfileOpen((v) => !v);
-            setStickersOpen(false);
-          }}
-        >
-          <ProfileIcon />
-        </button>
         <button
           type="submit"
           className="chat-send"

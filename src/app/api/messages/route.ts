@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
 import { notifyPartner } from "@/lib/push";
+import { clearTyping } from "@/lib/chat-typing";
+import { MESSAGE_INCLUDE, postMessageSchema, toMessageDto } from "@/lib/chat-messages";
 
 export async function GET(req: Request) {
   const authResult = await requireCoupleApi();
@@ -11,19 +12,22 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const after = searchParams.get("after");
 
-  const messages = await prisma.message.findMany({
-    where: {
-      coupleId: authResult.couple.id,
-      ...(after ? { createdAt: { gt: new Date(after) } } : {}),
-    },
-    orderBy: { createdAt: "asc" },
-    take: after ? 100 : 200,
-    include: {
-      author: { select: { id: true, displayName: true, avatarPath: true } },
-    },
-  });
+  const [messages, couple] = await Promise.all([
+    prisma.message.findMany({
+      where: {
+        coupleId: authResult.couple.id,
+        ...(after ? { createdAt: { gt: new Date(after) } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+      take: after ? 100 : 200,
+      include: MESSAGE_INCLUDE,
+    }),
+    prisma.couple.findUnique({
+      where: { id: authResult.couple.id },
+      select: { pinnedMessageId: true },
+    }),
+  ]);
 
-  // Mark partner messages as read
   await prisma.message.updateMany({
     where: {
       coupleId: authResult.couple.id,
@@ -33,41 +37,89 @@ export async function GET(req: Request) {
     data: { readAt: new Date() },
   });
 
-  return NextResponse.json({ messages });
-}
+  const pinnedMessageId = couple?.pinnedMessageId ?? null;
+  let pinnedPreview: { id: string; body: string; authorName: string } | null = null;
+  if (pinnedMessageId) {
+    const inList = messages.find((m) => m.id === pinnedMessageId);
+    if (inList) {
+      pinnedPreview = {
+        id: inList.id,
+        body: inList.body,
+        authorName: inList.author.displayName,
+      };
+    } else {
+      const pinned = await prisma.message.findFirst({
+        where: { id: pinnedMessageId, coupleId: authResult.couple.id },
+        select: {
+          id: true,
+          body: true,
+          author: { select: { displayName: true } },
+        },
+      });
+      if (pinned) {
+        pinnedPreview = {
+          id: pinned.id,
+          body: pinned.body,
+          authorName: pinned.author.displayName,
+        };
+      }
+    }
+  }
 
-const postSchema = z.object({
-  body: z.string().min(1).max(4000),
-});
+  return NextResponse.json({
+    messages: messages.map((m) => toMessageDto(m, authResult.user.id)),
+    pinnedMessageId,
+    pinnedPreview,
+  });
+}
 
 export async function POST(req: Request) {
   const authResult = await requireCoupleApi();
   if ("error" in authResult) return authResult.error;
 
   const json = await req.json().catch(() => null);
-  const parsed = postSchema.safeParse(json);
+  const parsed = postMessageSchema.safeParse(json);
   if (!parsed.success) {
+    return NextResponse.json({ error: "Некорректное сообщение" }, { status: 400 });
+  }
+
+  const body = parsed.data.body.trim();
+  if (!body) {
     return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
+  }
+
+  if (parsed.data.replyToId) {
+    const reply = await prisma.message.findFirst({
+      where: { id: parsed.data.replyToId, coupleId: authResult.couple.id },
+      select: { id: true },
+    });
+    if (!reply) {
+      return NextResponse.json({ error: "Сообщение для ответа не найдено" }, { status: 404 });
+    }
   }
 
   const message = await prisma.message.create({
     data: {
       coupleId: authResult.couple.id,
       authorId: authResult.user.id,
-      body: parsed.data.body.trim(),
+      body,
+      replyToId: parsed.data.replyToId,
+      quoteText: parsed.data.quoteText?.trim() || null,
     },
-    include: {
-      author: { select: { id: true, displayName: true, avatarPath: true } },
-    },
+    include: MESSAGE_INCLUDE,
   });
 
-  const preview =
-    message.body.length > 80 ? `${message.body.slice(0, 77)}…` : message.body;
+  clearTyping(authResult.couple.id, authResult.user.id);
+
+  const preview = body.length > 80 ? `${body.slice(0, 77)}…` : body;
   void notifyPartner(authResult.couple.id, authResult.user.id, {
     title: message.author.displayName,
     body: preview,
     url: "/chat",
   });
 
-  return NextResponse.json({ message }, { status: 201 });
+  return NextResponse.json(
+    { message: toMessageDto(message, authResult.user.id) },
+    { status: 201 },
+  );
 }

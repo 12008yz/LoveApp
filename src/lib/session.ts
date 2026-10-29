@@ -17,12 +17,28 @@ export const getMembership = cache(async (userId: string) => {
         include: {
           members: {
             include: {
-              user: { select: { id: true, displayName: true, email: true, avatarPath: true } },
+              user: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  email: true,
+                  avatarPath: true,
+                  lastSeenAt: true,
+                },
+              },
             },
           },
         },
       },
-      user: { select: { id: true, displayName: true, email: true, avatarPath: true } },
+      user: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          avatarPath: true,
+          lastSeenAt: true,
+        },
+      },
     },
   });
 });

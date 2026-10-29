@@ -19,9 +19,11 @@ model User {
   displayName  String
   avatarPath   String?
   createdAt    DateTime @default(now())
+  lastSeenAt   DateTime?
 
   membership         CoupleMember?
   messages           Message[]
+  reactions          MessageReaction[]
   diaryEntries       DiaryEntry[]
   events             Event[]
   letters            Letter[]           @relation("LetterAuthor")
@@ -55,9 +57,11 @@ model Couple {
   status     String    @default("waiting") // waiting | active
   startedAt  DateTime?
   createdAt  DateTime  @default(now())
+  pinnedMessageId String?
 
+  pinnedMessage  Message?       @relation("CouplePin", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
   members        CoupleMember[]
-  messages       Message[]
+  messages       Message[]      @relation("CoupleMessages")
   diaryEntries   DiaryEntry[]
   events         Event[]
   letters        Letter[]
@@ -91,11 +95,36 @@ model Message {
   body      String
   readAt    DateTime?
   createdAt DateTime @default(now())
+  editedAt            DateTime?
+  replyToId           String?
+  quoteText           String?
+  /// Bumped on any reaction create/update/delete so SSE can sync removals.
+  reactionsUpdatedAt  DateTime?
 
-  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
-  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  couple          Couple            @relation("CoupleMessages", fields: [coupleId], references: [id], onDelete: Cascade)
+  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo         Message?          @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]         @relation("MessageReply")
+  reactions       MessageReaction[]
+  pinnedByCouples Couple[]          @relation("CouplePin")
 
   @@index([coupleId, createdAt])
+  @@index([coupleId, editedAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([updatedAt])
 }
 
 model DiaryEntry {

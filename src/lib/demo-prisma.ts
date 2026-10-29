@@ -90,6 +90,51 @@ function applyInclude(model: string, row: DemoRow, include?: Record<string, unkn
       out[rel] = user ? applySelect(user, select) : null;
       continue;
     }
+    // Chat MESSAGE_INCLUDE: reply preview + reactions
+    if (rel === "replyTo" && model === "message") {
+      const replyId = row.replyToId as string | null | undefined;
+      if (!replyId) {
+        out.replyTo = null;
+        continue;
+      }
+      const target = store.message.find((m) => m.id === replyId);
+      if (!target) {
+        out.replyTo = null;
+        continue;
+      }
+      const author = store.user.find((u) => u.id === target.authorId);
+      const replySelect =
+        typeof conf === "object" && conf && "select" in conf
+          ? (conf as { select: Record<string, unknown> }).select
+          : undefined;
+      if (replySelect) {
+        const picked: DemoRow = { id: String(target.id) };
+        for (const [key, val] of Object.entries(replySelect)) {
+          if (!val) continue;
+          if (key === "author") {
+            const authorSelect =
+              typeof val === "object" && val && "select" in val
+                ? (val as { select: Record<string, boolean> }).select
+                : undefined;
+            picked.author = author ? applySelect(author, authorSelect) : null;
+          } else {
+            picked[key] = target[key];
+          }
+        }
+        out.replyTo = picked;
+      } else {
+        out.replyTo = {
+          ...target,
+          author: author ? { ...author } : null,
+        };
+      }
+      continue;
+    }
+    if (rel === "reactions" && model === "message") {
+      const rows = store.messageReaction.filter((r) => r.messageId === row.id);
+      out.reactions = rows.map((r) => applySelect(r, select));
+      continue;
+    }
     if (rel === "couple") {
       const couple = store.couple.find((c) => c.id === row.coupleId);
       if (!couple) {
@@ -310,6 +355,7 @@ export function createDemoPrisma() {
     "couple",
     "coupleMember",
     "message",
+    "messageReaction",
     "diaryEntry",
     "event",
     "letter",
