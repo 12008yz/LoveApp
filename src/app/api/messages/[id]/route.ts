@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
+import { recordDeletedMessage } from "@/lib/chat-deletes";
 import { clearTyping } from "@/lib/chat-typing";
 import { MESSAGE_INCLUDE, patchMessageSchema, toMessageDto } from "@/lib/chat-messages";
 
@@ -42,4 +43,26 @@ export async function PATCH(req: Request, ctx: Ctx) {
   clearTyping(authResult.couple.id, authResult.user.id);
 
   return NextResponse.json({ message: toMessageDto(message, authResult.user.id) });
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const authResult = await requireCoupleApi();
+  if ("error" in authResult) return authResult.error;
+
+  const { id } = await ctx.params;
+  const existing = await prisma.message.findFirst({
+    where: { id, coupleId: authResult.couple.id },
+    select: { id: true, authorId: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+  }
+  if (existing.authorId !== authResult.user.id) {
+    return NextResponse.json({ error: "Можно удалять только свои сообщения" }, { status: 403 });
+  }
+
+  await prisma.message.delete({ where: { id } });
+  recordDeletedMessage(authResult.couple.id, id);
+
+  return NextResponse.json({ ok: true, id });
 }

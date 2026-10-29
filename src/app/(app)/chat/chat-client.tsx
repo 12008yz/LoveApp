@@ -223,11 +223,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
-  const [quoteText, setQuoteText] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
-  const [quotePicker, setQuotePicker] = useState<MessageDto | null>(null);
-  const quoteTextRef = useRef<HTMLParagraphElement>(null);
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -319,6 +316,20 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         }
         if (payload.type === "message_updated" && payload.messages?.length) {
           setMessages((prev) => mergeById(prev, payload.messages as MessageDto[]));
+        }
+        if (payload.type === "message_deleted" && payload.ids?.length) {
+          const gone = new Set(payload.ids as string[]);
+          setMessages((prev) =>
+            prev
+              .filter((m) => !gone.has(m.id))
+              .map((m) =>
+                m.replyTo && gone.has(m.replyTo.id)
+                  ? { ...m, replyTo: null, quoteText: null }
+                  : m,
+              ),
+          );
+          setPinnedMessageId((cur) => (cur && gone.has(cur) ? null : cur));
+          setPinnedPreview((cur) => (cur && gone.has(cur.id) ? null : cur));
         }
         if (payload.type === "reads" && payload.reads?.length) {
           const readMap = new Map(
@@ -416,7 +427,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   function clearComposerExtras() {
     setReplyTo(null);
-    setQuoteText(null);
     setEditingId(null);
   }
 
@@ -455,7 +465,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         body: JSON.stringify({
           body: trimmed,
           replyToId: replyTo?.id,
-          quoteText: quoteText || undefined,
         }),
       });
       const json = await res.json();
@@ -574,50 +583,43 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     setSearchHits(json.messages || []);
   }
 
-  function openReply(m: MessageDto, quote?: string | null) {
+  function openReply(m: MessageDto) {
     setMenu(null);
-    setQuotePicker(null);
     setEditingId(null);
     setReplyTo(m);
-    setQuoteText(quote?.trim() || null);
     window.getSelection()?.removeAllRanges();
     textareaRef.current?.focus();
   }
 
   function openEdit(m: MessageDto) {
     setMenu(null);
-    setQuotePicker(null);
     setReplyTo(null);
-    setQuoteText(null);
     setEditingId(m.id);
     setText(m.body);
     textareaRef.current?.focus();
   }
 
-  function openQuotePicker(m: MessageDto) {
+  async function deleteMessage(m: MessageDto) {
     setMenu(null);
-    setQuotePicker(m);
-    // Pre-select full text after paint so handles appear and can be shrunk/expanded.
-    requestAnimationFrame(() => {
-      const el = quoteTextRef.current;
-      if (!el) return;
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    });
-  }
-
-  function confirmQuote(useSelection: boolean) {
-    if (!quotePicker) return;
-    const sel = window.getSelection()?.toString().trim() || "";
-    const quote = useSelection && sel ? sel.slice(0, 500) : quotePicker.body.slice(0, 500);
-    openReply(quotePicker, quote);
+    const res = await fetch(`/api/messages/${m.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error || "Не удалось удалить");
+      return;
+    }
+    setMessages((prev) =>
+      prev
+        .filter((x) => x.id !== m.id)
+        .map((x) =>
+          x.replyTo?.id === m.id ? { ...x, replyTo: null, quoteText: null } : x,
+        ),
+    );
+    setPinnedMessageId((cur) => (cur === m.id ? null : cur));
+    setPinnedPreview((cur) => (cur?.id === m.id ? null : cur));
+    if (editingId === m.id || replyTo?.id === m.id) clearComposerExtras();
   }
 
   function startPress(messageId: string, clientX: number, clientY: number) {
-    if (quotePicker) return;
     pressStart.current = { x: clientX, y: clientY };
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
@@ -895,9 +897,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               <button type="button" onClick={() => openReply(menuMessage)}>
                 Ответить
               </button>
-              <button type="button" onClick={() => openQuotePicker(menuMessage)}>
-                Цитировать…
-              </button>
               {menuMessage.authorId === me ? (
                 <button type="button" onClick={() => openEdit(menuMessage)}>
                   Изменить
@@ -918,40 +917,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               >
                 Копировать
               </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {quotePicker ? (
-        <div className="chat-sheet" role="dialog" aria-modal="true" aria-label="Выбор цитаты">
-          <button
-            type="button"
-            className="chat-sheet__backdrop"
-            aria-label="Закрыть"
-            onClick={() => {
-              setQuotePicker(null);
-              window.getSelection()?.removeAllRanges();
-            }}
-          />
-          <div className="chat-sheet__panel chat-sheet__panel--quote">
-            <div className="chat-sheet__handle" />
-            <h3 className="chat-sheet__title">Цитата</h3>
-            <p className="chat-sheet__hint">
-              Потяните синие маркеры, чтобы выбрать фрагмент. Можно сузить или расширить пальцами.
-            </p>
-            <div className="chat-quote-pick">
-              <p ref={quoteTextRef} className="chat-quote-pick__text">
-                {quotePicker.body}
-              </p>
-            </div>
-            <div className="chat-sheet__quote-actions">
-              <button type="button" className="chat-sheet__btn-secondary" onClick={() => confirmQuote(false)}>
-                Всё сообщение
-              </button>
-              <button type="button" className="chat-sheet__btn-primary" onClick={() => confirmQuote(true)}>
-                Цитировать выделенное
-              </button>
+              {menuMessage.authorId === me ? (
+                <button
+                  type="button"
+                  className="chat-sheet__action--danger"
+                  onClick={() => void deleteMessage(menuMessage)}
+                >
+                  Удалить
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -976,7 +950,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         <div className="chat-composer-bar">
           <div className="chat-composer-bar__text">
             <strong>{editingId ? "Редактирование" : `Ответ · ${replyTo?.author.displayName}`}</strong>
-            <span>{editingId ? text.slice(0, 80) : quoteText || replyTo?.body}</span>
+            <span>{editingId ? text.slice(0, 80) : replyTo?.body}</span>
           </div>
           <button type="button" className="chat-icon-btn" aria-label="Отмена" onClick={clearComposerExtras}>
             <CloseIcon />

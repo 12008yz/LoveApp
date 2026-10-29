@@ -6,10 +6,7 @@ export default async function LettersPage() {
   await requireCouple();
   return (
     <div>
-      <SectionHeader
-        title="Письма"
-        subtitle="Напишите сейчас — откроется позже. Как кусочек бумаги для двоих."
-      />
+      <SectionHeader title="Письма" subtitle="Написать сейчас — открыть позже." />
       <LettersClient />
     </div>
   );

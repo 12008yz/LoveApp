@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isActionableUnread, isInboxUnread, presentLetter } from "@/lib/letters";
+import {
+  canEditLetter,
+  isActionableUnread,
+  isInboxUnread,
+  presentLetter,
+} from "@/lib/letters";
 
 const base = {
   id: "1",
@@ -45,5 +50,19 @@ describe("letter unread helpers", () => {
     const view = presentLetter(base, "partner", new Date("2031-01-01"));
     expect(isInboxUnread(view, "partner")).toBe(true);
     expect(isActionableUnread(view, "partner")).toBe(true);
+  });
+});
+
+describe("canEditLetter", () => {
+  it("allows author while unopened", () => {
+    expect(canEditLetter(base, "author")).toBe(true);
+  });
+
+  it("blocks after partner opened", () => {
+    expect(canEditLetter({ ...base, openedAt: new Date() }, "author")).toBe(false);
+  });
+
+  it("blocks partner", () => {
+    expect(canEditLetter(base, "partner")).toBe(false);
   });
 });

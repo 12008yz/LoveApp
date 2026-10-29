@@ -51,3 +51,11 @@ export function isActionableUnread(
     !letter.openedAt
   );
 }
+
+/** Author may edit until the partner marks the letter opened. */
+export function canEditLetter(
+  letter: { authorId: string; openedAt: Date | string | null },
+  viewerId: string,
+) {
+  return letter.authorId === viewerId && !letter.openedAt;
+}

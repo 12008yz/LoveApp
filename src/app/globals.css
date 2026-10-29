@@ -834,6 +834,9 @@ select {
   border-bottom: none;
   box-shadow: var(--shadow);
   animation: chat-sheet-up 200ms var(--ease) both;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chat-sheet__panel--quote {
@@ -933,6 +936,10 @@ select {
 
 .chat-sheet__actions > button:active {
   background: var(--rose-mist);
+}
+
+.chat-sheet__actions > button.chat-sheet__action--danger {
+  color: var(--danger);
 }
 
 .chat-sheet__title {
@@ -1849,38 +1856,259 @@ select {
   border-color: var(--rose-deep);
 }
 
-.letter-paper {
-  background: linear-gradient(160deg, #f4efd8 0%, #efe8c8 55%, #e8dfb8 100%);
-  border: 1px solid color-mix(in srgb, var(--wood) 35%, var(--line));
-  border-radius: 2px;
-  box-shadow: 2px 3px 0 rgba(92, 30, 31, 0.08);
-  padding: 1rem 1.1rem;
+.letters__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 0.85rem;
-  position: relative;
 }
 
-.letter-paper::before {
+.letters__status {
+  margin: 0;
+  flex: 1;
+}
+
+.letters__list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.letter-envelope-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.25rem 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--wood) 28%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 88%, #f3ebcf);
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.letter-envelope-card:active {
+  transform: scale(0.985);
+}
+
+.letter-envelope-card.is-new {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rose) 35%, transparent), var(--shadow-soft);
+}
+
+.letter-envelope-card.is-locked {
+  opacity: 0.82;
+}
+
+.letter-envelope-card__flap {
+  width: 2.85rem;
+  height: 2rem;
+  border-radius: 4px 4px 2px 2px;
+  background:
+    linear-gradient(160deg, transparent 48%, color-mix(in srgb, var(--wood) 22%, #e8dcc0) 49%),
+    linear-gradient(200deg, transparent 48%, color-mix(in srgb, var(--wood) 22%, #e8dcc0) 49%),
+    linear-gradient(180deg, #f7f0da 0%, #ebe2c4 100%);
+  border: 1px solid color-mix(in srgb, var(--wood) 30%, var(--line));
+  box-shadow: inset 0 -6px 0 color-mix(in srgb, var(--surface) 70%, #e6dcb8);
+}
+
+.letter-envelope-card__body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.letter-envelope-card__body strong {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.02rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.letter-envelope-card__badge {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.letter-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem 1rem calc(1rem + var(--bottom-nav-h) + var(--safe-bottom));
+}
+
+.letter-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background: rgba(42, 24, 25, 0.38);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+
+.letter-overlay__stage {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 22rem);
+  min-height: 14rem;
+  perspective: 900px;
+}
+
+.letter-env {
+  position: absolute;
+  left: 50%;
+  bottom: 0.4rem;
+  width: min(88%, 17rem);
+  height: 10.5rem;
+  transform: translateX(-50%);
+  transform-style: preserve-3d;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms var(--ease);
+  z-index: 2;
+}
+
+.letter-overlay__stage.is-idle .letter-env,
+.letter-overlay__stage.is-opening .letter-env,
+.letter-overlay__stage.is-sealing .letter-env {
+  opacity: 1;
+}
+
+.letter-env__pocket {
+  position: absolute;
+  inset: 2.2rem 0 0;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(180deg, #f3ead0 0%, #e6d9b6 100%);
+  border: 1px solid color-mix(in srgb, var(--wood) 32%, var(--line));
+  box-shadow: var(--shadow-soft);
+}
+
+.letter-env__pocket::before,
+.letter-env__pocket::after {
   content: "";
   position: absolute;
   top: 0;
+  bottom: 0;
+  width: 52%;
+  background: color-mix(in srgb, #efe4c4 80%, var(--wood));
+  opacity: 0.45;
+}
+
+.letter-env__pocket::before {
+  left: 0;
+  clip-path: polygon(0 0, 100% 42%, 0 100%);
+}
+
+.letter-env__pocket::after {
   right: 0;
-  border-width: 0 14px 14px 0;
-  border-style: solid;
-  border-color: transparent #d9d0a8 transparent transparent;
+  clip-path: polygon(100% 0, 0 42%, 100% 100%);
 }
 
-.letters-heading-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+.letter-env__flap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5.4rem;
+  transform-origin: top center;
+  background: linear-gradient(180deg, #f8f1dc 0%, #eadfb8 100%);
+  border: 1px solid color-mix(in srgb, var(--wood) 32%, var(--line));
+  border-radius: 8px 8px 0 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transition: transform 1s var(--ease);
+  z-index: 3;
 }
 
-.letters-heading-badge .dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: #c62828;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #c62828 25%, transparent);
+.letter-overlay__stage.is-opening .letter-env__flap,
+.letter-overlay__stage.is-open .letter-env__flap {
+  transform: rotateX(168deg);
+}
+
+.letter-overlay__stage.is-sealing .letter-env__flap,
+.letter-overlay__stage.is-idle .letter-env__flap {
+  transform: rotateX(0deg);
+}
+
+.letter-sheet {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  width: 100%;
+  max-height: min(70dvh, 32rem);
+  overflow: auto;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border-radius: 4px;
+  background: linear-gradient(165deg, #f7f1df 0%, #efe6c8 100%);
+  border: 1px solid color-mix(in srgb, var(--wood) 28%, var(--line));
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(2.5rem) scale(0.96);
+  transition:
+    opacity 0.45s var(--ease),
+    transform 0.9s var(--ease);
+}
+
+.letter-overlay__stage.is-open .letter-sheet {
+  opacity: 1;
+  transform: none;
+  z-index: 4;
+}
+
+.letter-overlay__stage.is-opening .letter-sheet {
+  opacity: 1;
+  transform: translateY(-0.35rem);
+  transition-delay: 0.25s;
+}
+
+.letter-overlay__stage.is-sealing .letter-sheet {
+  opacity: 0;
+  transform: translateY(2.8rem) scale(0.94);
+  pointer-events: none;
+}
+
+.letter-overlay__stage.is-idle .letter-sheet {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.letter-sheet__title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.letter-sheet__body {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  margin: 0.75rem 0 1rem;
+}
+
+.letter-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter-env__flap,
+  .letter-sheet {
+    transition: none !important;
+  }
 }
 
 /* —— Shared journal diary —— */

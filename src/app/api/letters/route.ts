@@ -55,13 +55,7 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json(
-    {
-      letter: {
-        ...letter,
-        locked: unlockAt > new Date(),
-        canRead: true,
-      },
-    },
+    { letter: presentLetter(letter, authResult.user.id) },
     { status: 201 },
   );
 }

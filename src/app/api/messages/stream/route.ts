@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
+import { takeDeletedSince } from "@/lib/chat-deletes";
 import { MESSAGE_INCLUDE, aggregateReactions, toMessageDto } from "@/lib/chat-messages";
 import { getPartnerTyping } from "@/lib/chat-typing";
 
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
   let lastPin: string | null | undefined = undefined;
   let lastPartnerSeen: string | null | undefined = undefined;
   let lastTypingActive = false;
+  let lastDeleteCheck = Date.now();
   let closed = false;
 
   const stream = new ReadableStream({
@@ -150,6 +152,13 @@ export async function GET(req: Request) {
           if (lastPin === undefined || lastPin !== pinId) {
             lastPin = pinId;
             send({ type: "pin", messageId: pinId });
+            emitted = true;
+          }
+
+          const deletedIds = takeDeletedSince(couple.id, lastDeleteCheck);
+          lastDeleteCheck = Date.now();
+          if (deletedIds.length) {
+            send({ type: "message_deleted", ids: deletedIds });
             emitted = true;
           }
 
