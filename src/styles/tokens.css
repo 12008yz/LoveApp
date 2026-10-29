@@ -31,10 +31,10 @@
   --btn-secondary-bg: rgba(255, 255, 255, 0.72);
   --body-glow-a: color-mix(in srgb, var(--rose-soft) 70%, white);
   --body-glow-b: color-mix(in srgb, var(--slate) 12%, var(--paper));
-  --bubble-mine-from: #f3c9cf;
-  --bubble-mine-to: #e8aeb8;
-  --bubble-theirs: color-mix(in srgb, white 88%, var(--paper));
-  --composer-input: color-mix(in srgb, white 80%, var(--paper));
+  --bubble-mine: #f0c9cf;
+  --bubble-theirs: #ffffff;
+  --composer-bar: rgba(255, 250, 247, 0.92);
+  --composer-field: #ffffff;
   --theme-color: #b4234a;
 
   /* Shape */

@@ -894,34 +894,38 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       {error ? <p className="chat-error">{error}</p> : null}
 
       <form className="chat-composer" onSubmit={send}>
-        <button
-          type="button"
-          className={stickersOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
-          aria-label="Стикеры"
-          aria-pressed={stickersOpen}
-          onClick={() => {
-            setStickersOpen((v) => !v);
-            setProfileOpen(false);
-            setSearchOpen(false);
-          }}
-        >
-          <StickerIcon />
-        </button>
-        <textarea
-          ref={textareaRef}
-          className="chat-composer__input"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            if (e.target.value.trim()) scheduleTyping();
-          }}
-          onKeyDown={onComposerKey}
-          placeholder={editingId ? "Изменить сообщение…" : "Сообщение…"}
-          maxLength={4000}
-          rows={1}
-          enterKeyHint="send"
-          autoComplete="off"
-        />
+        <div className="chat-composer__field">
+          <button
+            type="button"
+            className={
+              stickersOpen ? "chat-composer__embed-btn is-active" : "chat-composer__embed-btn"
+            }
+            aria-label="Стикеры"
+            aria-pressed={stickersOpen}
+            onClick={() => {
+              setStickersOpen((v) => !v);
+              setProfileOpen(false);
+              setSearchOpen(false);
+            }}
+          >
+            <StickerIcon />
+          </button>
+          <textarea
+            ref={textareaRef}
+            className="chat-composer__input"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (e.target.value.trim()) scheduleTyping();
+            }}
+            onKeyDown={onComposerKey}
+            placeholder={editingId ? "Изменить сообщение…" : "Сообщение"}
+            maxLength={4000}
+            rows={1}
+            enterKeyHint="send"
+            autoComplete="off"
+          />
+        </div>
         <button
           type="submit"
           className="chat-send"
