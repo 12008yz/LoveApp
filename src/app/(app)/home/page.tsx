@@ -9,7 +9,7 @@ export default async function HomePage() {
   return (
     <div className="home-page">
       <section className="home-hero home-hero--compact">
-        <h1>LoveApp</h1>
+        <h1>Домик</h1>
         <p>
           Привет, {membership.user.displayName}
           {partner ? ` — здесь вы с ${partner.user.displayName}` : ""}.

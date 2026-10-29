@@ -54,16 +54,18 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [moreOpen]);
 
+  const showTopbar = pathname === "/home";
+
   return (
-    <div className="app-shell">
-      <header className="app-topbar">
-        <div>
-          <Link href="/home" scroll={false} className="brand-mark">
-            LoveApp
-          </Link>
-          <p className="couple-label">{coupleLabel}</p>
-        </div>
-      </header>
+    <div className={showTopbar ? "app-shell" : "app-shell app-shell--no-topbar"}>
+      {showTopbar ? (
+        <header className="app-topbar">
+          <div>
+            <p className="brand-mark">{coupleLabel}</p>
+            <p className="couple-label">Ваш домик</p>
+          </div>
+        </header>
+      ) : null}
 
       <main className="app-main">{children}</main>
 
