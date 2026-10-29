@@ -15,10 +15,10 @@ export function resolveTheme(pref: ThemePreference, systemDark?: boolean): Resol
 }
 
 export function readThemePreference(): ThemePreference {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
   if (raw === "light" || raw === "dark" || raw === "system") return raw;
-  return "dark";
+  return "light";
 }
 
 export function applyResolvedTheme(resolved: ResolvedTheme) {

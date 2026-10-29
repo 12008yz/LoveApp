@@ -26,8 +26,8 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>("dark");
-  const [resolved, setResolved] = useState<"dark" | "light">("dark");
+  const [preference, setPreferenceState] = useState<ThemePreference>("light");
+  const [resolved, setResolved] = useState<"dark" | "light">("light");
 
   const setPreference = useCallback((pref: ThemePreference) => {
     setPreferenceState(pref);
