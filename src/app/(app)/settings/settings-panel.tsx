@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PushSettings } from "@/components/push-settings";
-import { ThemeSettings } from "@/components/theme-settings";
 
 export function SettingsPanel({
   inviteCode,
@@ -26,7 +25,6 @@ export function SettingsPanel({
 
   return (
     <>
-      <ThemeSettings />
       <PushSettings />
       <div className="soft-panel" style={{ marginTop: "1rem" }}>
         <h2 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Настройки пары</h2>
