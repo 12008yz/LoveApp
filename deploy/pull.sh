@@ -8,8 +8,18 @@
 set -eu
 
 APP_DIR="${APP_DIR:-/opt/loveApp}"
-BRANCH="${DEPLOY_BRANCH:-main}"
 REMOTE="${DEPLOY_REMOTE:-origin}"
+# Prefer explicit DEPLOY_BRANCH; else keep the branch already checked out
+# (so `git clone -b feature/...` + bare `bash pull.sh` does not jump to main).
+if [ -n "${DEPLOY_BRANCH:-}" ]; then
+  BRANCH="$DEPLOY_BRANCH"
+else
+  BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  if [ "$BRANCH" = "HEAD" ]; then
+    BRANCH="main"
+  fi
+fi
+echo "==> deploy branch: $BRANCH"
 
 cd "$APP_DIR"
 
@@ -33,7 +43,9 @@ fi
 
 echo "==> fetch $REMOTE $BRANCH"
 git fetch "$REMOTE" "$BRANCH"
-git checkout "$BRANCH"
+# Drop local edits to tracked files so checkout cannot fail (.env is gitignored — kept)
+git reset --hard HEAD
+git checkout -B "$BRANCH" "$REMOTE/$BRANCH"
 git reset --hard "$REMOTE/$BRANCH"
 
 # Restore env if somehow missing after checkout
