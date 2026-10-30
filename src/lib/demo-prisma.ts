@@ -91,6 +91,12 @@ function matchWhere(row: DemoRow, where?: Where): boolean {
         if (!msg || !matchWhere(msg, op as Where)) return false;
         continue;
       }
+      if (key === "mediaItem") {
+        const store = getDemoStore();
+        const media = store.mediaItem.find((m) => m.id === row.mediaItemId);
+        if (!media || !matchWhere(media, op as Where)) return false;
+        continue;
+      }
 
       // Nested equality object (rare) — match fields on the same row.
       if (!matchWhere(row, op as Where)) return false;
@@ -175,6 +181,44 @@ function applyInclude(model: string, row: DemoRow, include?: Record<string, unkn
     if (rel === "reactions" && model === "message") {
       const rows = store.messageReaction.filter((r) => r.messageId === row.id);
       out.reactions = rows.map((r) => applySelect(r, select));
+      continue;
+    }
+    if (rel === "comments" && model === "mediaItem") {
+      const confObj =
+        typeof conf === "object" && conf ? (conf as Record<string, unknown>) : {};
+      let rows = store.mediaComment.filter((c) => c.mediaItemId === row.id);
+      const orderBy = confObj.orderBy as Record<string, "asc" | "desc"> | undefined;
+      rows = sortRows(rows, orderBy);
+      const take = typeof confObj.take === "number" ? confObj.take : undefined;
+      if (take != null) rows = rows.slice(0, take);
+      const commentInclude =
+        typeof confObj.include === "object" && confObj.include
+          ? (confObj.include as Record<string, unknown>)
+          : nestedInclude;
+      out.comments = rows.map((c) => {
+        let cc: DemoRow = { ...c };
+        if (commentInclude?.author) {
+          const u = store.user.find((x) => x.id === c.authorId);
+          const authorSelect =
+            typeof commentInclude.author === "object" &&
+            commentInclude.author &&
+            "select" in commentInclude.author
+              ? (commentInclude.author as { select: Record<string, boolean> }).select
+              : undefined;
+          cc = { ...cc, author: u ? applySelect(u, authorSelect) : null };
+        }
+        return cc;
+      });
+      continue;
+    }
+    if (rel === "place") {
+      const placeId = row.placeId as string | null | undefined;
+      if (!placeId) {
+        out.place = null;
+        continue;
+      }
+      const place = store.place.find((p) => p.id === placeId);
+      out.place = place ? applySelect(place, select) : null;
       continue;
     }
     if (rel === "couple") {
@@ -412,6 +456,7 @@ export function createDemoPrisma() {
     "event",
     "letter",
     "mediaItem",
+    "mediaComment",
     "place",
     "timelineEvent",
     "wishlistItem",

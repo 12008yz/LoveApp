@@ -3,6 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
 import { saveImage } from "@/lib/storage";
 
+const COMMENT_INCLUDE = {
+  orderBy: { createdAt: "asc" as const },
+  take: 50,
+  include: {
+    author: { select: { id: true, displayName: true } },
+  },
+};
+
+function withCommentCount<T extends { comments: unknown[] }>(item: T) {
+  return {
+    ...item,
+    commentCount: item.comments.length,
+  };
+}
+
 export async function GET() {
   const authResult = await requireCoupleApi();
   if ("error" in authResult) return authResult.error;
@@ -13,10 +28,11 @@ export async function GET() {
     include: {
       author: { select: { id: true, displayName: true } },
       place: true,
+      comments: COMMENT_INCLUDE,
     },
   });
 
-  return NextResponse.json({ items });
+  return NextResponse.json({ items: items.map(withCommentCount) });
 }
 
 export async function POST(req: Request) {
@@ -63,8 +79,9 @@ export async function POST(req: Request) {
     include: {
       author: { select: { id: true, displayName: true } },
       place: true,
+      comments: COMMENT_INCLUDE,
     },
   });
 
-  return NextResponse.json({ item }, { status: 201 });
+  return NextResponse.json({ item: withCommentCount(item) }, { status: 201 });
 }

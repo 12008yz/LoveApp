@@ -1662,12 +1662,6 @@ select {
   margin-top: 0.5rem;
 }
 
-/* Skip offscreen message layout/paint work in long threads */
-.chat-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 4.5rem;
-}
-
 .chat-row__avatar {
   width: 1.85rem;
   height: 1.85rem;
@@ -2927,29 +2921,214 @@ select {
   color: var(--rose-deep);
 }
 
-.album-feed {
+.album {
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
-.album-feed__card {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: var(--paper-glass);
+.album-upload {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem 1rem;
+  background: var(--panel-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
 }
 
-.album-feed__card img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+.album-upload__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.album-feed__card figcaption {
-  padding: 0.85rem 1rem 1rem;
+.album-upload__pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--btn-secondary-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.album-upload .field {
+  margin-bottom: 0;
+}
+
+.album-upload .field textarea {
+  min-height: 4.5rem;
+}
+
+.album-upload__preview {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  margin: 0 auto;
+}
+
+.album-feed {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.album-post {
+  margin: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.album-post__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.95rem 0.55rem;
+}
+
+.album-post__author {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.album-post__meta {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.album-post__shot {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--paper-deep);
+}
+
+.album-post__body {
+  padding: 0.75rem 0.95rem 0.95rem;
+}
+
+.album-post__caption {
+  margin: 0 0 0.55rem;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.album-post__caption strong {
+  font-weight: 700;
+  margin-right: 0.25rem;
+}
+
+.album-post__more {
+  display: block;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.album-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.album-comments__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.album-comments__item p {
+  margin: 0;
+  flex: 1;
+  white-space: pre-wrap;
+}
+
+.album-comments__item strong {
+  font-weight: 700;
+  margin-right: 0.25rem;
+}
+
+.album-comments__del {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.album-comments__del:hover {
+  color: var(--rose-deep);
+  background: var(--rose-mist);
+}
+
+.album-comment-form {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.65rem;
+}
+
+.album-comment-form input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 0.55rem 0.85rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.album-comment-form input:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.album-comment-form__send {
+  flex: none;
+  min-width: 2.5rem;
+  padding-inline: 0.65rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .constellation {

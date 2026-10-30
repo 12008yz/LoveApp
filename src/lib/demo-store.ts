@@ -17,6 +17,7 @@ type Store = {
   event: DemoRow[];
   letter: DemoRow[];
   mediaItem: DemoRow[];
+  mediaComment: DemoRow[];
   place: DemoRow[];
   timelineEvent: DemoRow[];
   wishlistItem: DemoRow[];
@@ -279,6 +280,7 @@ function seed(): Store {
     event,
     letter,
     mediaItem: [],
+    mediaComment: [],
     place,
     timelineEvent,
     wishlistItem,
@@ -294,7 +296,11 @@ export function getDemoStore(): Store {
   if (!globalThis.__loveDemoStore) {
     globalThis.__loveDemoStore = seed();
   }
-  return globalThis.__loveDemoStore;
+  const store = globalThis.__loveDemoStore;
+  // Hot-reload may keep an older in-memory store without newer collections.
+  if (!store.mediaComment) store.mediaComment = [];
+  if (!store.messageReaction) store.messageReaction = [];
+  return store;
 }
 
 export function newDemoId(prefix = "id") {

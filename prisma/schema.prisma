@@ -28,6 +28,7 @@ model User {
   events             Event[]
   letters            Letter[]           @relation("LetterAuthor")
   mediaItems         MediaItem[]
+  mediaComments      MediaComment[]
   timelineEvents     TimelineEvent[]
   wishlistItems      WishlistItem[]
   moodPings          MoodPing[]
@@ -185,11 +186,25 @@ model MediaItem {
   placeId   String?
   createdAt DateTime @default(now())
 
-  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
-  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  place  Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  couple   Couple         @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  author   User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  place    Place?         @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  comments MediaComment[]
 
   @@index([coupleId, createdAt])
+}
+
+model MediaComment {
+  id          String   @id @default(cuid())
+  mediaItemId String
+  authorId    String
+  body        String
+  createdAt   DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([mediaItemId, createdAt])
 }
 
 model Place {
