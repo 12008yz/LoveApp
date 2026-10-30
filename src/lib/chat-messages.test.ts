@@ -112,5 +112,6 @@ describe("mediaPreviewLabel / pushPreviewForMessage", () => {
   it("prefers caption text for push preview", () => {
     expect(pushPreviewForMessage("привет", [{ kind: "image" }])).toBe("привет");
     expect(pushPreviewForMessage("  ", [{ kind: "video" }])).toBe("Видео");
+    expect(pushPreviewForMessage("::sticker:cute/heart-glow::", null)).toBe("Сердце");
   });
 });

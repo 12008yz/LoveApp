@@ -35,49 +35,8 @@ export const MORE_NAV = [
 export const CHAT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"] as const;
 export type ChatReaction = (typeof CHAT_REACTIONS)[number];
 
-/** Quick sticker pack for chat (sent as plain message body). */
-export const CHAT_STICKERS = [
-  "❤️",
-  "🥰",
-  "😘",
-  "💋",
-  "🤗",
-  "💘",
-  "💞",
-  "💗",
-  "💕",
-  "✨",
-  "🌟",
-  "🌙",
-  "⭐",
-  "☕",
-  "🍵",
-  "🍰",
-  "🍓",
-  "🍫",
-  "🌸",
-  "🌻",
-  "🌹",
-  "🐻",
-  "🐰",
-  "🐱",
-  "🐶",
-  "🦋",
-  "💌",
-  "🎀",
-  "🥹",
-  "😊",
-  "😌",
-  "😴",
-  "🥺",
-  "😂",
-  "🔥",
-  "👍",
-  "👋",
-  "💪",
-  "🏠",
-  "🎵",
-] as const;
+/** @deprecated Prefer STICKER_PACKS from @/lib/stickers */
+export { CHAT_STICKERS, STICKER_PACKS } from "@/lib/stickers";
 
 export const GAME_HUB = [
   {

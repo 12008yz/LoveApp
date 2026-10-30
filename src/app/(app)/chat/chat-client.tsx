@@ -13,7 +13,16 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { CHAT_REACTIONS, CHAT_STICKERS } from "@/lib/constants";
+import { CHAT_REACTIONS } from "@/lib/constants";
+import {
+  encodeStickerToken,
+  isStickerMessageBody,
+  parseStickerToken,
+  stickerImageById,
+  stickerPreviewLabel,
+  STICKER_PACKS,
+  type StickerItem,
+} from "@/lib/stickers";
 import { formatLastSeen, isOnline } from "@/lib/chat-presence";
 import {
   CHAT_IMAGE_MAX_BYTES,
@@ -107,13 +116,28 @@ function sameDay(a: string, b: string) {
 
 function isStickerBody(body: string, attachments?: AttachmentDto[] | null) {
   if (attachments?.length) return false;
-  return body.length <= 8 && /\p{Extended_Pictographic}/u.test(body) && !/\n/.test(body);
+  return isStickerMessageBody(body);
 }
 
 function replyPreviewText(m: MessageDto) {
   const trimmed = m.body.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) {
+    return stickerPreviewLabel(trimmed) ?? trimmed;
+  }
   return mediaPreviewLabel(m.attachments) || "Сообщение";
+}
+
+function StickerBody({ body }: { body: string }) {
+  const id = parseStickerToken(body);
+  if (id) {
+    const meta = stickerImageById(id);
+    if (!meta) return <span className="chat-bubble__text">Стикер</span>;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img className="chat-bubble__sticker-img" src={meta.src} alt={meta.label} draggable={false} />
+    );
+  }
+  return <span className="chat-bubble__sticker">{body}</span>;
 }
 
 function ChatSvgIcon({ children }: { children: ReactNode }) {
@@ -235,7 +259,8 @@ function TrashIcon() {
 }
 
 function pinPreviewText(body: string) {
-  return body.replace(/\s+/g, " ").trim();
+  const t = body.replace(/\s+/g, " ").trim();
+  return stickerPreviewLabel(t) ?? t;
 }
 
 function buildMenuState(messageId: string, mine: boolean): MenuState {
@@ -324,6 +349,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
+  const [stickerPackId, setStickerPackId] = useState(STICKER_PACKS[0]?.id ?? "emoji");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchHits, setSearchHits] = useState<MessageDto[]>([]);
@@ -1172,7 +1198,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 }}
               >
                 <span className="meta">{m.author.displayName}</span>
-                <span>{m.body}</span>
+                <span>{stickerPreviewLabel(m.body) ?? m.body}</span>
               </button>
             ))}
           </div>
@@ -1288,7 +1314,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       <strong className="chat-quote__author">{m.replyTo.author.displayName}</strong>
-                      <span className="chat-quote__text">{m.quoteText || m.replyTo.body}</span>
+                      <span className="chat-quote__text">
+                        {(() => {
+                          const raw = m.quoteText || m.replyTo.body;
+                          return stickerPreviewLabel(raw) ?? raw;
+                        })()}
+                      </span>
                     </button>
                   ) : null}
                   {hasMedia ? (
@@ -1340,9 +1371,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   ) : null}
                   <div className="chat-bubble__main">
                     {m.body.trim() || !hasMedia ? (
-                      <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
-                        {m.body}
-                      </span>
+                      sticker ? (
+                        <StickerBody body={m.body} />
+                      ) : (
+                        <span className="chat-bubble__text">{m.body}</span>
+                      )
                     ) : null}
                     <span className="chat-bubble__meta">
                       {m.editedAt ? <span className="chat-edited">изм.</span> : null}
@@ -1490,15 +1523,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   ) : null}
                   <div className="chat-bubble__main">
                     {menuMessage.body.trim() || !menuMessage.attachments?.length ? (
-                      <span
-                        className={
-                          isStickerBody(menuMessage.body, menuMessage.attachments)
-                            ? "chat-bubble__sticker"
-                            : "chat-bubble__text"
-                        }
-                      >
-                        {menuMessage.body}
-                      </span>
+                      isStickerBody(menuMessage.body, menuMessage.attachments) ? (
+                        <StickerBody body={menuMessage.body} />
+                      ) : (
+                        <span className="chat-bubble__text">{menuMessage.body}</span>
+                      )
                     ) : null}
                   </div>
                 </div>
@@ -1557,6 +1586,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   <span>Ответить</span>
                 </button>
                 {menuMessage.authorId === me &&
+                !isStickerBody(menuMessage.body, menuMessage.attachments) &&
                 (menuMessage.body.trim() || !(menuMessage.attachments?.length)) ? (
                   <button type="button" onClick={() => openEdit(menuMessage)}>
                     <EditIcon />
@@ -1626,17 +1656,49 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 <CloseIcon />
               </button>
             </div>
-            <div className="chat-stickers__grid">
-              {CHAT_STICKERS.map((sticker) => (
+            <div className="chat-stickers__tabs" role="tablist" aria-label="Наборы">
+              {STICKER_PACKS.map((pack) => (
                 <button
-                  key={sticker}
+                  key={pack.id}
                   type="button"
-                  className="chat-stickers__btn"
-                  onClick={() => void sendBody(sticker)}
+                  role="tab"
+                  aria-selected={stickerPackId === pack.id}
+                  className={
+                    stickerPackId === pack.id
+                      ? "chat-stickers__tab is-active"
+                      : "chat-stickers__tab"
+                  }
+                  onClick={() => setStickerPackId(pack.id)}
                 >
-                  {sticker}
+                  {pack.label}
                 </button>
               ))}
+            </div>
+            <div className="chat-stickers__grid">
+              {(STICKER_PACKS.find((p) => p.id === stickerPackId) ?? STICKER_PACKS[0]).items.map(
+                (item: StickerItem) =>
+                  item.type === "emoji" ? (
+                    <button
+                      key={`e-${item.value}`}
+                      type="button"
+                      className="chat-stickers__btn"
+                      onClick={() => void sendBody(item.value)}
+                    >
+                      {item.value}
+                    </button>
+                  ) : (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="chat-stickers__btn chat-stickers__btn--image"
+                      aria-label={item.label}
+                      onClick={() => void sendBody(encodeStickerToken(item.id))}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.src} alt="" draggable={false} />
+                    </button>
+                  ),
+              )}
             </div>
           </div>
         </>

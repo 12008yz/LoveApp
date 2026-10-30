@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CHAT_REACTIONS } from "@/lib/constants";
+import { stickerPreviewLabel } from "@/lib/stickers";
 
 export const postMessageSchema = z
   .object({
@@ -154,6 +155,8 @@ export function pushPreviewForMessage(
 ): string {
   const trimmed = body.trim();
   if (trimmed) {
+    const sticker = stickerPreviewLabel(trimmed);
+    if (sticker) return sticker;
     return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
   }
   return mediaPreviewLabel(attachments) || "Сообщение";
@@ -180,9 +183,10 @@ function toAttachmentDto(
 }
 
 export function toMessageDto(message: MessageWithRelations, me: string): MessageDto {
-  const replyBody = message.replyTo
+  const replyRaw = message.replyTo
     ? message.replyTo.body.trim() || mediaPreviewLabel(message.replyTo.attachments)
     : "";
+  const replyBody = stickerPreviewLabel(replyRaw) ?? replyRaw;
 
   return {
     id: message.id,
@@ -193,7 +197,9 @@ export function toMessageDto(message: MessageWithRelations, me: string): Message
     createdAt: iso(message.createdAt) as string,
     editedAt: iso(message.editedAt),
     replyToId: message.replyToId ?? null,
-    quoteText: message.quoteText ?? null,
+    quoteText: message.quoteText
+      ? stickerPreviewLabel(message.quoteText) ?? message.quoteText
+      : null,
     author: {
       id: message.author.id,
       displayName: message.author.displayName,

@@ -1674,6 +1674,20 @@ select {
   line-height: 1;
 }
 
+.chat-bubble__sticker-img {
+  display: block;
+  width: min(42vw, 148px);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.chat-bubble--sticker:has(.chat-bubble__sticker-img) {
+  padding: 0.2rem;
+}
+
 .chat-bubble__meta {
   display: inline-flex;
   align-items: center;
@@ -1821,6 +1835,34 @@ select {
   line-height: 1.2;
 }
 
+.chat-stickers__tabs {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.1rem 0 0.15rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-stickers__tab {
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.75rem;
+  background: color-mix(in srgb, var(--surface) 80%, white);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-stickers__tab.is-active {
+  border-color: transparent;
+  background: var(--rose-mist);
+  color: var(--rose-deep);
+}
+
 .chat-stickers__top .chat-icon-btn {
   width: 2.1rem;
   height: 2.1rem;
@@ -1840,6 +1882,8 @@ select {
 }
 
 .chat-stickers__btn {
+  display: grid;
+  place-items: center;
   background: color-mix(in srgb, var(--surface) 78%, white);
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
@@ -1850,6 +1894,20 @@ select {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.chat-stickers__btn--image {
+  padding: 0.25rem;
+  min-height: 3.1rem;
+}
+
+.chat-stickers__btn--image img {
+  width: 100%;
+  max-width: 2.85rem;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .chat-stickers:not(.is-open),
