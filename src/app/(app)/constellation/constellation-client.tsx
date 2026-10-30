@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type EventItem = {
   id: string;
@@ -21,13 +22,18 @@ function starPosition(id: string, index: number) {
 export function ConstellationClient() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/timeline");
-    const json = await res.json();
-    const list = (json.events || []) as EventItem[];
-    setEvents(list);
-    if (!activeId && list[0]) setActiveId(list[0].id);
+    try {
+      const res = await fetch("/api/timeline");
+      const json = await res.json();
+      const list = (json.events || []) as EventItem[];
+      setEvents(list);
+      if (!activeId && list[0]) setActiveId(list[0].id);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -64,32 +70,48 @@ export function ConstellationClient() {
   return (
     <div className="stack">
       <div className="constellation" aria-label="Созвездие">
-        {events.map((ev, i) => (
-          <button
-            key={ev.id}
-            type="button"
-            className={ev.id === active?.id ? "constellation__star is-active" : "constellation__star"}
-            style={starPosition(ev.id, i)}
-            title={ev.title}
-            aria-label={ev.title}
-            onClick={() => setActiveId(ev.id)}
-          />
-        ))}
-        <div className="constellation__detail">
-          {active ? (
-            <>
-              <h3>{active.title}</h3>
-              <p className="meta" style={{ color: "rgba(245,236,208,0.75)" }}>
-                {new Date(active.happenedAt).toLocaleDateString("ru-RU")} · {active.author.displayName}
-              </p>
-              {active.body ? <p style={{ marginBottom: 0 }}>{active.body}</p> : null}
-            </>
-          ) : (
-            <p style={{ margin: 0, color: "rgba(245,236,208,0.75)" }}>
-              Пока пусто — добавьте первую звезду ниже.
-            </p>
-          )}
-        </div>
+        {!ready ? (
+          <div className="constellation__detail">
+            <ListSkeleton rows={2} />
+          </div>
+        ) : (
+          <>
+            {events.map((ev, i) => {
+              const pos = starPosition(ev.id, i);
+              return (
+                <button
+                  key={ev.id}
+                  type="button"
+                  className={
+                    ev.id === active?.id
+                      ? "constellation__star is-active list-enter"
+                      : "constellation__star list-enter"
+                  }
+                  style={{ ...pos, ...listEnterStyle(i) }}
+                  title={ev.title}
+                  aria-label={ev.title}
+                  onClick={() => setActiveId(ev.id)}
+                />
+              );
+            })}
+            <div className="constellation__detail list-enter" style={listEnterStyle(0)}>
+              {active ? (
+                <>
+                  <h3>{active.title}</h3>
+                  <p className="meta" style={{ color: "rgba(245,236,208,0.75)" }}>
+                    {new Date(active.happenedAt).toLocaleDateString("ru-RU")} ·{" "}
+                    {active.author.displayName}
+                  </p>
+                  {active.body ? <p style={{ marginBottom: 0 }}>{active.body}</p> : null}
+                </>
+              ) : (
+                <p style={{ margin: 0, color: "rgba(245,236,208,0.75)" }}>
+                  Пока пусто — добавьте первую звезду ниже.
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <form className="soft-panel" onSubmit={onSubmit}>

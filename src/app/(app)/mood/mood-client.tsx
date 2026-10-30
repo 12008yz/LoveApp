@@ -3,6 +3,7 @@
 import { format, subDays } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type CheckIn = {
   id: string;
@@ -18,15 +19,20 @@ export function MoodClient() {
   const me = data?.user?.id;
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [score, setScore] = useState(4);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/mood");
-    const json = await res.json();
-    setCheckIns(json.checkIns || []);
+    try {
+      const res = await fetch("/api/mood");
+      const json = await res.json();
+      setCheckIns(json.checkIns || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function save() {
@@ -70,37 +76,45 @@ export function MoodClient() {
       <div className="grid-2">
         <div className="soft-panel">
           <h3 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Я</h3>
-          <div className="mood-bars">
-            {days.map((day) => {
-              const value = avgFor(mine, day);
-              return (
-                <div key={day} className="mood-row">
-                  <span className="meta">{day.slice(5)}</span>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${(value / 5) * 100}%` }} />
+          {!ready ? (
+            <ListSkeleton rows={4} />
+          ) : (
+            <div className="mood-bars">
+              {days.map((day, i) => {
+                const value = avgFor(mine, day);
+                return (
+                  <div key={day} className="mood-row list-enter" style={listEnterStyle(i)}>
+                    <span className="meta">{day.slice(5)}</span>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${(value / 5) * 100}%` }} />
+                    </div>
+                    <span>{value || "—"}</span>
                   </div>
-                  <span>{value || "—"}</span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="soft-panel">
           <h3 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Партнёр</h3>
-          <div className="mood-bars">
-            {days.map((day) => {
-              const value = avgFor(partner, day);
-              return (
-                <div key={day} className="mood-row">
-                  <span className="meta">{day.slice(5)}</span>
-                  <div className="bar-track">
-                    <div className="bar-fill" style={{ width: `${(value / 5) * 100}%` }} />
+          {!ready ? (
+            <ListSkeleton rows={4} />
+          ) : (
+            <div className="mood-bars">
+              {days.map((day, i) => {
+                const value = avgFor(partner, day);
+                return (
+                  <div key={day} className="mood-row list-enter" style={listEnterStyle(i)}>
+                    <span className="meta">{day.slice(5)}</span>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${(value / 5) * 100}%` }} />
+                    </div>
+                    <span>{value || "—"}</span>
                   </div>
-                  <span>{value || "—"}</span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

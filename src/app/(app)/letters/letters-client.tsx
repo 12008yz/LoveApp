@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 import { canEditLetter, isActionableUnread } from "@/lib/letters";
 
 type Letter = {
@@ -50,12 +51,17 @@ export function LettersClient() {
   const [phase, setPhase] = useState<EnvelopePhase>("idle");
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [ready, setReady] = useState(false);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function load() {
-    const res = await fetch("/api/letters");
-    const json = await res.json();
-    setLetters(json.letters || []);
+    try {
+      const res = await fetch("/api/letters");
+      const json = await res.json();
+      setLetters(json.letters || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -254,18 +260,21 @@ export function LettersClient() {
       </div>
 
       <div className="letters__list">
-        {shown.length === 0 ? (
+        {!ready ? <ListSkeleton rows={4} tall /> : null}
+        {ready && shown.length === 0 ? (
           <p className="muted">
             {tab === "inbox" ? "Входящих писем нет." : "Пока пусто — напишите первое."}
           </p>
         ) : null}
-        {shown.map((letter) => (
+        {ready
+          ? shown.map((letter, i) => (
           <button
             key={letter.id}
             type="button"
-            className={`letter-envelope-card${letter.locked ? " is-locked" : ""}${
+            className={`letter-envelope-card list-enter${letter.locked ? " is-locked" : ""}${
               !letter.openedAt && letter.authorId !== me && !letter.locked ? " is-new" : ""
             }`}
+            style={listEnterStyle(i)}
             onClick={() => openEnvelope(letter)}
           >
             <span className="letter-envelope-card__flap" aria-hidden />
@@ -284,7 +293,8 @@ export function LettersClient() {
               <span className="letter-envelope-card__badge">{statusLabel(letter, me)}</span>
             </span>
           </button>
-        ))}
+            ))
+          : null}
       </div>
 
       {mounted && overlay

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type Item = {
   id: string;
@@ -12,15 +13,20 @@ type Item = {
 
 export function CareClient() {
   const [items, setItems] = useState<Item[]>([]);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/care");
-    const json = await res.json();
-    setItems(json.items || []);
+    try {
+      const res = await fetch("/api/care");
+      const json = await res.json();
+      setItems(json.items || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -73,25 +79,31 @@ export function CareClient() {
       <div className="grid-2">
         <div className="soft-panel">
           <h3 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Радует</h3>
-          {joys.map((i) => (
-            <div key={i.id} className="list-item">
+          {!ready ? <ListSkeleton rows={2} /> : null}
+          {ready
+            ? joys.map((i, idx) => (
+            <div key={i.id} className="list-item list-enter" style={listEnterStyle(idx)}>
               <div>{i.body}</div>
               <div className="meta">
                 {i.author.displayName} · {i.visibility === "private" ? "личное" : "общее"}
               </div>
             </div>
-          ))}
+              ))
+            : null}
         </div>
         <div className="soft-panel">
           <h3 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Бесит</h3>
-          {annoyances.map((i) => (
-            <div key={i.id} className="list-item">
+          {!ready ? <ListSkeleton rows={2} /> : null}
+          {ready
+            ? annoyances.map((i, idx) => (
+            <div key={i.id} className="list-item list-enter" style={listEnterStyle(idx)}>
               <div>{i.body}</div>
               <div className="meta">
                 {i.author.displayName} · {i.visibility === "private" ? "личное" : "общее"}
               </div>
             </div>
-          ))}
+              ))
+            : null}
         </div>
       </div>
     </div>

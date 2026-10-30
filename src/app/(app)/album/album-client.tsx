@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type Item = {
   id: string;
@@ -14,11 +15,16 @@ export function AlbumClient() {
   const [items, setItems] = useState<Item[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const mediaRes = await fetch("/api/media");
-    const media = await mediaRes.json();
-    setItems(media.items || []);
+    try {
+      const mediaRes = await fetch("/api/media");
+      const media = await mediaRes.json();
+      setItems(media.items || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -95,11 +101,13 @@ export function AlbumClient() {
       </form>
 
       <div className="album-feed">
-        {items.length === 0 ? (
+        {!ready ? <ListSkeleton rows={3} tall /> : null}
+        {ready && items.length === 0 ? (
           <p className="muted">Лента пуста — добавьте первое совместное фото.</p>
         ) : null}
-        {items.map((item) => (
-          <figure key={item.id} className="album-feed__card">
+        {ready
+          ? items.map((item, i) => (
+          <figure key={item.id} className="album-feed__card list-enter" style={listEnterStyle(i)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.filePath} alt={item.caption || "Фото"} />
             <figcaption>
@@ -110,7 +118,8 @@ export function AlbumClient() {
               </div>
             </figcaption>
           </figure>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );

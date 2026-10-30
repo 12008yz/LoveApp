@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 import { GAME_HUB } from "@/lib/constants";
 
 type SessionItem = {
@@ -20,16 +21,21 @@ export function GamesClient() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [stubNote, setStubNote] = useState("");
+  const [ready, setReady] = useState(false);
 
-  async function load() {
-    const res = await fetch("/api/games");
-    const json = await res.json();
-    setSessions(json.sessions || []);
+  async function load(isInitial = false) {
+    try {
+      const res = await fetch("/api/games");
+      const json = await res.json();
+      setSessions(json.sessions || []);
+    } finally {
+      if (isInitial) setReady(true);
+    }
   }
 
   useEffect(() => {
-    void load();
-    const id = setInterval(() => void load(), 2000);
+    void load(true);
+    const id = setInterval(() => void load(false), 2000);
     return () => clearInterval(id);
   }, []);
 
@@ -141,19 +147,29 @@ export function GamesClient() {
 
       <div className="soft-panel">
         <h3 style={{ marginTop: 0, fontFamily: "var(--font-display)" }}>Недавние партии</h3>
-        {sessions.length === 0 ? <p className="muted">Партий пока нет.</p> : null}
-        {sessions.slice(0, 8).map((s) => (
+        {!ready ? <ListSkeleton rows={3} /> : null}
+        {ready && sessions.length === 0 ? <p className="muted">Партий пока нет.</p> : null}
+        {ready
+          ? sessions.slice(0, 8).map((s, i) => (
           <button
             key={s.id}
             type="button"
-            className="list-item"
-            style={{ width: "100%", textAlign: "left", cursor: "pointer", border: "none", background: "transparent" }}
+            className="list-item list-enter"
+            style={{
+              width: "100%",
+              textAlign: "left",
+              cursor: "pointer",
+              border: "none",
+              background: "transparent",
+              ...listEnterStyle(i),
+            }}
             onClick={() => setActiveId(s.id)}
           >
             <strong>{s.type}</strong>
             <div className="meta">{s.status}</div>
           </button>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );

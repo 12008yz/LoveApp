@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type Item = {
   id: string;
@@ -14,15 +15,20 @@ type Item = {
 
 export function WishlistClient() {
   const [items, setItems] = useState<Item[]>([]);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/wishlist");
-    const json = await res.json();
-    setItems(json.items || []);
+    try {
+      const res = await fetch("/api/wishlist");
+      const json = await res.json();
+      setItems(json.items || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -86,9 +92,11 @@ export function WishlistClient() {
         </button>
       </form>
       <div className="soft-panel">
-        {items.length === 0 ? <p className="muted">Список желаний пуст.</p> : null}
-        {items.map((item) => (
-          <div key={item.id} className="list-item">
+        {!ready ? <ListSkeleton rows={3} /> : null}
+        {ready && items.length === 0 ? <p className="muted">Список желаний пуст.</p> : null}
+        {ready
+          ? items.map((item, i) => (
+          <div key={item.id} className="list-item list-enter" style={listEnterStyle(i)}>
             <strong style={{ textDecoration: item.fulfilled ? "line-through" : "none" }}>{item.title}</strong>
             <div className="meta">{item.author.displayName}</div>
             {item.url ? (
@@ -106,7 +114,8 @@ export function WishlistClient() {
               </button>
             </div>
           </div>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );

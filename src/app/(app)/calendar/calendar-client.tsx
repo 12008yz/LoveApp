@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type EventItem = {
   id: string;
@@ -13,11 +14,16 @@ type EventItem = {
 
 export function CalendarClient() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/events");
-    const json = await res.json();
-    setEvents(json.events || []);
+    try {
+      const res = await fetch("/api/events");
+      const json = await res.json();
+      setEvents(json.events || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -79,9 +85,13 @@ export function CalendarClient() {
         </button>
       </form>
       <div className="soft-panel">
-        {events.length === 0 ? <p className="muted">Пока нет дат — добавьте первую.</p> : null}
-        {events.map((ev) => (
-          <div key={ev.id} className="list-item">
+        {!ready ? <ListSkeleton rows={3} /> : null}
+        {ready && events.length === 0 ? (
+          <p className="muted">Пока нет дат — добавьте первую.</p>
+        ) : null}
+        {ready
+          ? events.map((ev, i) => (
+          <div key={ev.id} className="list-item list-enter" style={listEnterStyle(i)}>
             <strong>{ev.title}</strong>
             <div className="meta">
               {new Date(ev.occursAt).toLocaleString("ru-RU")} · {ev.author.displayName}
@@ -94,7 +104,8 @@ export function CalendarClient() {
               Удалить
             </button>
           </div>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );

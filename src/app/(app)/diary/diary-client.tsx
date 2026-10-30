@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type Entry = {
   id: string;
@@ -58,13 +59,18 @@ export function DiaryClient() {
   const [error, setError] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const days = useMemo(() => groupByDay(entries), [entries]);
 
   async function load() {
-    const res = await fetch("/api/diary");
-    const json = await res.json();
-    setEntries(json.entries || []);
+    try {
+      const res = await fetch("/api/diary");
+      const json = await res.json();
+      setEntries(json.entries || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -167,22 +173,27 @@ export function DiaryClient() {
       ) : null}
 
       <div className="diary-journal">
-        {entries.length === 0 && !composeOpen ? (
+        {!ready ? <ListSkeleton rows={4} tall /> : null}
+        {ready && entries.length === 0 && !composeOpen ? (
           <p className="diary-empty">Пока пусто — откройте новый лист и напишите первое.</p>
         ) : null}
 
-        {days.map((day) => (
+        {ready
+          ? days.map((day) => (
           <section key={day.key} className="diary-day">
             <h2 className="diary-day__label">{day.label}</h2>
             <div className="diary-day__list">
-              {day.entries.map((entry) => {
+              {day.entries.map((entry, ei) => {
                 const role = entry.author.genderRole === "girl" ? "girl" : "boy";
                 return (
                   <article
                     key={entry.id}
                     className={
-                      role === "girl" ? "diary-leaf diary-leaf--girl" : "diary-leaf diary-leaf--boy"
+                      role === "girl"
+                        ? "diary-leaf diary-leaf--girl list-enter"
+                        : "diary-leaf diary-leaf--boy list-enter"
                     }
+                    style={listEnterStyle(ei)}
                   >
                     <header className="diary-leaf__head">
                       <h3 className="diary-leaf__title">{entry.title}</h3>
@@ -210,7 +221,8 @@ export function DiaryClient() {
               })}
             </div>
           </section>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );

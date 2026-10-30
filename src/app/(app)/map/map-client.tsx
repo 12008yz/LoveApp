@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 const PlacesMap = dynamic(() => import("./places-map"), { ssr: false });
 
@@ -19,11 +20,16 @@ export function MapClient() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [lat, setLat] = useState(55.75);
   const [lng, setLng] = useState(37.62);
+  const [ready, setReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/places");
-    const json = await res.json();
-    setPlaces(json.places || []);
+    try {
+      const res = await fetch("/api/places");
+      const json = await res.json();
+      setPlaces(json.places || []);
+    } finally {
+      setReady(true);
+    }
   }
 
   useEffect(() => {
@@ -97,11 +103,13 @@ export function MapClient() {
         />
       </div>
       <div className="soft-panel">
-        {places.length === 0 ? (
+        {!ready ? <ListSkeleton rows={3} /> : null}
+        {ready && places.length === 0 ? (
           <p className="muted">Пока нет мест — отметьте первое свидание на карте.</p>
         ) : null}
-        {places.map((p) => (
-          <div key={p.id} className="list-item">
+        {ready
+          ? places.map((p, i) => (
+          <div key={p.id} className="list-item list-enter" style={listEnterStyle(i)}>
             <strong>{p.name}</strong>
             {p.address ? <div>{p.address}</div> : null}
             <div className="meta">
@@ -112,7 +120,8 @@ export function MapClient() {
             </div>
             {p.notes ? <p>{p.notes}</p> : null}
           </div>
-        ))}
+            ))
+          : null}
       </div>
     </div>
   );
