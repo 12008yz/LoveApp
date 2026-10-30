@@ -714,25 +714,18 @@ select {
   align-items: flex-start;
   max-width: min(78%, 26rem);
   gap: 0;
-  margin-bottom: 0;
-  transition: margin-bottom 0.38s var(--ease);
+  /* Reserve reaction slot via padding so layout eases without fighting scroll */
+  padding-bottom: 0;
+  transition: padding-bottom 0.32s var(--ease);
 }
 
 .chat-row--mine .chat-bubble-wrap {
   align-items: flex-end;
 }
 
-.chat-bubble-wrap .chat-bubble:not(.chat-bubble--sticker) {
-  transition: padding-bottom 0.38s var(--ease);
-}
-
 .chat-bubble-wrap--reacted {
-  margin-bottom: 0.7rem;
-}
-
-/* Leave room so the reaction chip doesn't sit on the timestamp */
-.chat-bubble-wrap--reacted .chat-bubble:not(.chat-bubble--sticker) {
-  padding-bottom: 0.7rem;
+  /* Chip ~1.4rem with slight overlap on bubble — reserve enough so next row doesn't jump */
+  padding-bottom: 1.05rem;
 }
 
 .chat-bubble--with-quote {
@@ -826,7 +819,7 @@ select {
 .chat-reactions {
   /* Always on the left edge of the bubble — timestamp stays free on the right */
   position: absolute;
-  bottom: -0.55rem;
+  bottom: 0.05rem;
   left: 0.35rem;
   right: auto;
   z-index: 2;
@@ -836,7 +829,7 @@ select {
   max-width: min(70%, 9rem);
   padding: 0;
   pointer-events: none;
-  animation: chat-reactions-in 0.38s var(--ease) both;
+  animation: chat-reactions-in 0.28s var(--ease) both;
 }
 
 .chat-reactions--mine {
@@ -864,7 +857,6 @@ select {
   align-items: center;
   gap: 0.18rem;
   -webkit-tap-highlight-color: transparent;
-  animation: chat-react-chip-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .chat-reactions__btn span {
@@ -892,7 +884,7 @@ select {
 @keyframes chat-reactions-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.86);
+    transform: translateY(4px) scale(0.92);
   }
   to {
     opacity: 1;
@@ -900,20 +892,9 @@ select {
   }
 }
 
-@keyframes chat-react-chip-in {
-  from {
-    opacity: 0;
-    transform: scale(0.7);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 .chat-react-burst {
   position: absolute;
-  bottom: 0.1rem;
+  bottom: 0.35rem;
   left: 1rem;
   right: auto;
   width: 0;
@@ -1100,13 +1081,11 @@ select {
   }
 
   .chat-reactions__btn.is-pop,
-  .chat-reactions,
-  .chat-reactions__btn {
+  .chat-reactions {
     animation: none !important;
   }
 
-  .chat-bubble-wrap,
-  .chat-bubble-wrap .chat-bubble:not(.chat-bubble--sticker) {
+  .chat-bubble-wrap {
     transition: none !important;
   }
 

@@ -2,6 +2,28 @@ import { getDemoStore, newDemoId, type DemoRow } from "@/lib/demo-store";
 
 type Where = Record<string, unknown>;
 
+const FILTER_OPS = new Set(["not", "gt", "gte", "lte", "lt", "in", "endsWith"]);
+
+/** Unwrap Prisma compound unique where, e.g. `{ messageId_userId: { messageId, userId } }`. */
+function unwrapWhere(where?: Where): Where | undefined {
+  if (!where) return where;
+  const entries = Object.entries(where);
+  if (entries.length !== 1) return where;
+  const [key, value] = entries[0];
+  if (
+    !key.includes("_") ||
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value instanceof Date
+  ) {
+    return where;
+  }
+  const nested = value as Record<string, unknown>;
+  if (Object.keys(nested).some((k) => FILTER_OPS.has(k))) return where;
+  return nested as Where;
+}
+
 function matchWhere(row: DemoRow, where?: Where): boolean {
   if (!where) return true;
   for (const [key, value] of Object.entries(where)) {
@@ -17,41 +39,61 @@ function matchWhere(row: DemoRow, where?: Where): boolean {
     if (typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
       const op = value as Record<string, unknown>;
       const cell = row[key];
-      if ("not" in op) {
-        if (cell === op.not) return false;
-        continue;
-      }
-      if ("gt" in op) {
-        if (!(cell instanceof Date) || !(op.gt instanceof Date) || !(cell > op.gt)) {
-          return false;
+      const hasFilterOp = Object.keys(op).some((k) => FILTER_OPS.has(k));
+
+      if (hasFilterOp) {
+        // Apply every operator on the object (Prisma allows `{ gt, not }` together).
+        if ("not" in op) {
+          if (op.not === null || op.not === undefined) {
+            if (cell == null) return false;
+          } else if (cell === op.not) {
+            return false;
+          }
+        }
+        if ("gt" in op) {
+          if (!(cell instanceof Date) || !(op.gt instanceof Date) || !(cell > op.gt)) {
+            return false;
+          }
+        }
+        if ("gte" in op) {
+          const gte = op.gte;
+          if (typeof cell === "string" && typeof gte === "string") {
+            if (cell < gte) return false;
+          } else if (cell instanceof Date && gte instanceof Date) {
+            if (!(cell >= gte)) return false;
+          } else {
+            return false;
+          }
+        }
+        if ("lte" in op) {
+          if (!(cell instanceof Date) || !(op.lte instanceof Date) || !(cell <= op.lte)) {
+            return false;
+          }
+        }
+        if ("lt" in op) {
+          if (!(cell instanceof Date) || !(op.lt instanceof Date) || !(cell < op.lt)) {
+            return false;
+          }
+        }
+        if ("in" in op && Array.isArray(op.in)) {
+          if (!op.in.includes(cell)) return false;
+        }
+        if ("endsWith" in op && typeof op.endsWith === "string") {
+          if (typeof cell !== "string" || !cell.endsWith(op.endsWith)) return false;
         }
         continue;
       }
-      if ("gte" in op) {
-        const gte = op.gte;
-        if (typeof cell === "string" && typeof gte === "string") {
-          if (cell < gte) return false;
-        } else if (cell instanceof Date && gte instanceof Date) {
-          if (!(cell >= gte)) return false;
-        } else {
-          return false;
-        }
+
+      // Relation filter, e.g. messageReaction where message: { coupleId }
+      if (key === "message") {
+        const store = getDemoStore();
+        const msg = store.message.find((m) => m.id === row.messageId);
+        if (!msg || !matchWhere(msg, op as Where)) return false;
         continue;
       }
-      if ("lte" in op) {
-        if (!(cell instanceof Date) || !(op.lte instanceof Date) || !(cell <= op.lte)) {
-          return false;
-        }
-        continue;
-      }
-      if ("in" in op && Array.isArray(op.in)) {
-        if (!op.in.includes(cell)) return false;
-        continue;
-      }
-      if ("endsWith" in op && typeof op.endsWith === "string") {
-        if (typeof cell !== "string" || !cell.endsWith(op.endsWith)) return false;
-        continue;
-      }
+
+      // Nested equality object (rare) — match fields on the same row.
+      if (!matchWhere(row, op as Where)) return false;
       continue;
     }
     if (row[key] !== value) return false;
@@ -214,7 +256,9 @@ function flattenCreateData(data: Record<string, unknown>) {
     }
     row[k] = v;
   }
-  if (!row.createdAt) row.createdAt = new Date();
+  const now = new Date();
+  if (!row.createdAt) row.createdAt = now;
+  if (!row.updatedAt) row.updatedAt = now;
   return { row, nestedCreates };
 }
 
@@ -236,7 +280,8 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
       select?: Record<string, boolean>;
     }) {
       const store = getDemoStore();
-      const row = store[model].find((r) => matchWhere(r, args.where));
+      const where = unwrapWhere(args.where);
+      const row = store[model].find((r) => matchWhere(r, where));
       if (!row) return null;
       return presentRow(model, row, args);
     },
@@ -247,8 +292,9 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
       orderBy?: Record<string, "asc" | "desc">;
     } = {}) {
       const store = getDemoStore();
+      const where = unwrapWhere(args.where);
       const rows = sortRows(
-        store[model].filter((r) => matchWhere(r, args.where)),
+        store[model].filter((r) => matchWhere(r, where)),
         args.orderBy,
       );
       const row = rows[0];
@@ -263,8 +309,9 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
       take?: number;
     } = {}) {
       const store = getDemoStore();
+      const where = unwrapWhere(args.where);
       let rows = sortRows(
-        store[model].filter((r) => matchWhere(r, args.where)),
+        store[model].filter((r) => matchWhere(r, where)),
         args.orderBy,
       );
       if (args.take) rows = rows.slice(0, args.take);
@@ -301,32 +348,44 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
       select?: Record<string, boolean>;
     }) {
       const store = getDemoStore();
-      const idx = store[model].findIndex((r) => matchWhere(r, args.where));
+      const where = unwrapWhere(args.where);
+      const idx = store[model].findIndex((r) => matchWhere(r, where));
       if (idx < 0) throw new Error(`demo ${model} not found`);
-      store[model][idx] = { ...store[model][idx], ...args.data };
+      store[model][idx] = {
+        ...store[model][idx],
+        ...args.data,
+        updatedAt: args.data.updatedAt ?? new Date(),
+      };
       return presentRow(model, store[model][idx], args);
     },
     async updateMany(args: { where?: Where; data: Record<string, unknown> }) {
       const store = getDemoStore();
+      const where = unwrapWhere(args.where);
       let count = 0;
       store[model] = store[model].map((r) => {
-        if (!matchWhere(r, args.where)) return r;
+        if (!matchWhere(r, where)) return r;
         count += 1;
-        return { ...r, ...args.data };
+        return {
+          ...r,
+          ...args.data,
+          updatedAt: args.data.updatedAt ?? new Date(),
+        };
       });
       return { count };
     },
     async delete(args: { where: Where }) {
       const store = getDemoStore();
-      const idx = store[model].findIndex((r) => matchWhere(r, args.where));
+      const where = unwrapWhere(args.where);
+      const idx = store[model].findIndex((r) => matchWhere(r, where));
       if (idx < 0) throw new Error(`demo ${model} not found`);
       const [removed] = store[model].splice(idx, 1);
       return removed;
     },
     async deleteMany(args: { where?: Where } = {}) {
       const store = getDemoStore();
+      const where = unwrapWhere(args.where);
       const before = store[model].length;
-      store[model] = store[model].filter((r) => !matchWhere(r, args.where));
+      store[model] = store[model].filter((r) => !matchWhere(r, where));
       return { count: before - store[model].length };
     },
     async upsert(args: {
@@ -334,14 +393,7 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }) {
-      // Support compound uniques like { authorId_day: { authorId, day } }
-      let where = args.where;
-      const compound = Object.values(args.where).find(
-        (v) => v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date),
-      );
-      if (compound && typeof compound === "object") {
-        where = compound as Where;
-      }
+      const where = unwrapWhere(args.where);
       const found = await this.findFirst({ where });
       if (found) return this.update({ where: { id: found.id }, data: args.update });
       return this.create({ data: args.create });

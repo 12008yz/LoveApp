@@ -331,6 +331,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stickToBottom = useRef(true);
   const didInitialScroll = useRef(false);
+  const reactingIds = useRef(new Set<string>());
 
   function isNearBottom(el: HTMLElement, threshold = 100) {
     return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
@@ -494,31 +495,19 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (!didInitialScroll.current) {
       didInitialScroll.current = true;
       stickToBottom.current = true;
-      const id1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         scrollLogToBottom();
         requestAnimationFrame(scrollLogToBottom);
       });
-      return () => cancelAnimationFrame(id1);
+      return;
     }
 
-    // Later updates (incl. reactions expanding space): follow only if already at bottom.
-    if (!(stickToBottom.current || stickersOpen)) return;
-
-    let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const id = requestAnimationFrame(() => {
-      if (cancelled) return;
-      scrollLogToBottom();
-      // Catch the reaction margin transition mid-way / near end.
-      timers.push(setTimeout(scrollLogToBottom, 40));
-      timers.push(setTimeout(scrollLogToBottom, 200));
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(id);
-      for (const t of timers) clearTimeout(t);
-    };
-  }, [messages, stickersOpen]);
+    // Only when message count changes — not on every reaction/read patch
+    // (that was fighting long-press and making reaction layout thrash).
+    if (stickToBottom.current || stickersOpen) {
+      requestAnimationFrame(scrollLogToBottom);
+    }
+  }, [messages.length, stickersOpen]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -659,24 +648,34 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   async function toggleReaction(messageId: string, emoji: string) {
     setMenu(null);
+    window.getSelection()?.removeAllRanges();
+    if (reactingIds.current.has(messageId)) return;
+    reactingIds.current.add(messageId);
     const prevMsg = messages.find((m) => m.id === messageId);
     const wasMine = Boolean(prevMsg?.reactions?.some((r) => r.emoji === emoji && r.me));
-    const res = await fetch(`/api/messages/${messageId}/reactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emoji }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error || "Реакция не сохранилась");
-      return;
+    try {
+      const res = await fetch(`/api/messages/${messageId}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Реакция не сохранилась");
+        return;
+      }
+      const next = (json.reactions as AggregatedReaction[]) || [];
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reactions: next } : m)),
+      );
+      const nowMine = next.some((r) => r.emoji === emoji && r.me);
+      if (!wasMine && nowMine) playReactBurst(messageId, emoji);
+      // No scroll on reaction — padding alone shifts layout; scroll was thrashing long-press.
+    } catch {
+      setError("Реакция не сохранилась");
+    } finally {
+      reactingIds.current.delete(messageId);
     }
-    const next = json.reactions as AggregatedReaction[];
-    setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, reactions: next } : m)),
-    );
-    const nowMine = next.some((r) => r.emoji === emoji && r.me);
-    if (!wasMine && nowMine) playReactBurst(messageId, emoji);
   }
 
   async function setPin(messageId: string | null) {
