@@ -24,6 +24,8 @@ import {
   type AttachmentDto,
   type MessageDto,
 } from "@/lib/chat-messages";
+import { MiniProfile } from "@/components/mini-profile";
+import { UserAvatar } from "@/components/user-avatar";
 
 type PendingMedia = {
   id: string;
@@ -77,27 +79,6 @@ type ReactBurst = {
   messageId: string;
   emoji: string;
 };
-
-function Avatar({
-  name,
-  src,
-  size = "md",
-}: {
-  name: string;
-  src?: string | null;
-  size?: "sm" | "md" | "lg" | "xl";
-}) {
-  const cls = `chat-avatar chat-avatar--${size}`;
-  if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img className={cls} src={src} alt="" />;
-  }
-  return (
-    <span className={`${cls} chat-avatar--fallback`} aria-hidden>
-      {(name || "?").slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
 
 function dayKey(iso: string) {
   const d = new Date(iso);
@@ -354,13 +335,20 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [menu, setMenu] = useState<MenuState>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
+  const [partnerLive, setPartnerLive] = useState<{
+    displayName: string;
+    avatarPath: string | null;
+  } | null>(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [reactBurst, setReactBurst] = useState<ReactBurst | null>(null);
   const [chatReady, setChatReady] = useState(false);
+  const [chatRevealed, setChatRevealed] = useState(false);
   const [tick, setTick] = useState(0);
   const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
   const [mediaViewer, setMediaViewer] = useState<MediaViewerState | null>(null);
+  const [miniProfileOpen, setMiniProfileOpen] = useState(false);
+  const [miniFocusId, setMiniFocusId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -371,7 +359,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stickToBottom = useRef(true);
-  const didInitialScroll = useRef(false);
   const reactingIds = useRef(new Set<string>());
   const lastTap = useRef<{ id: string; at: number } | null>(null);
 
@@ -386,6 +373,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   }
 
   const me = data?.user?.id || profile?.id;
+  function openMiniProfile(userId?: string | null) {
+    setMiniFocusId(userId ?? me ?? null);
+    setMiniProfileOpen(true);
+    setProfileOpen(false);
+    setStickersOpen(false);
+    setSearchOpen(false);
+  }
   const rows = useMemo(() => buildRows(messages, me), [messages, me]);
   const pinnedFromList = pinnedMessageId
     ? messages.find((m) => m.id === pinnedMessageId)
@@ -397,14 +391,22 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         ? { id: pinnedPreview.id, body: pinPreviewText(pinnedPreview.body) }
         : null;
 
+  const partnerView = partner
+    ? {
+        ...partner,
+        displayName: partnerLive?.displayName ?? partner.displayName,
+        avatarPath: partnerLive?.avatarPath ?? partner.avatarPath,
+      }
+    : null;
+
   const subtitle = useMemo(() => {
-    if (!partner) return "";
+    if (!partnerView) return "";
     if (partnerTyping) return "печатает…";
     if (isOnline(partnerSeen)) return "в сети";
-    return formatLastSeen(partnerSeen, partner.genderRole);
+    return formatLastSeen(partnerSeen, partnerView.genderRole);
     // tick refreshes relative time
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partner, partnerSeen, partnerTyping, tick]);
+  }, [partnerView, partnerSeen, partnerTyping, tick]);
 
   const scrollToMessage = useCallback((id: string) => {
     const el = logRef.current?.querySelector(`[data-message-id="${id}"]`);
@@ -529,27 +531,42 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     };
   }, []);
 
+  // First reveal: settle scroll while log is opacity 0, then fade in.
+  // stickersOpen must NOT be a dep here — opening stickers during settle
+  // would cancel the rAF chain and leave the log stuck hidden.
   useEffect(() => {
-    const el = logRef.current;
-    if (!el || messages.length === 0) return;
+    if (!chatReady || chatRevealed) return;
 
-    // First paint: jump to bottom instantly (no top→bottom animation).
-    if (!didInitialScroll.current) {
-      didInitialScroll.current = true;
-      stickToBottom.current = true;
-      requestAnimationFrame(() => {
-        scrollLogToBottom();
-        requestAnimationFrame(scrollLogToBottom);
-      });
+    let cancelled = false;
+    stickToBottom.current = true;
+    if (messages.length === 0) {
+      setChatRevealed(true);
       return;
     }
+    requestAnimationFrame(() => {
+      if (cancelled) return;
+      scrollLogToBottom();
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        scrollLogToBottom();
+        setChatRevealed(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatReady, chatRevealed, messages.length]);
 
-    // Only when message count changes — not on every reaction/read patch
-    // (that was fighting long-press and making reaction layout thrash).
+  // Only when message count changes — not on every reaction/read patch
+  // (that was fighting long-press and making reaction layout thrash).
+  useEffect(() => {
+    if (!chatRevealed) return;
+    const el = logRef.current;
+    if (!el || messages.length === 0) return;
     if (stickToBottom.current || stickersOpen) {
       requestAnimationFrame(scrollLogToBottom);
     }
-  }, [messages.length, stickersOpen]);
+  }, [chatRevealed, messages.length, stickersOpen]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -1051,13 +1068,22 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   return (
     <div className="chat-page">
-      {partner ? (
+      {partnerView ? (
         <header className="chat-header">
-          <Avatar name={partner.displayName} src={partner.avatarPath} size="md" />
-          <div className="chat-header__meta">
-            <strong>{partner.displayName}</strong>
+          <UserAvatar
+            name={partnerView.displayName}
+            src={partnerView.avatarPath}
+            size="md"
+            onClick={() => openMiniProfile(partnerView.id)}
+          />
+          <button
+            type="button"
+            className="chat-header__meta chat-header__meta-btn"
+            onClick={() => openMiniProfile(partnerView.id)}
+          >
+            <strong>{partnerView.displayName}</strong>
             <span className="chat-header__status">{subtitle}</span>
-          </div>
+          </button>
           <button
             type="button"
             className={searchOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
@@ -1072,17 +1098,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           </button>
           <button
             type="button"
-            className={profileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+            className={miniProfileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
             aria-label="Ваш профиль"
-            onClick={() => {
-              if (profileOpen) {
-                closeProfile();
-              } else {
-                setProfileOpen(true);
-                setStickersOpen(false);
-                setSearchOpen(false);
-              }
-            }}
+            onClick={() => openMiniProfile(me)}
           >
             <ProfileIcon />
           </button>
@@ -1143,9 +1161,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       ) : null}
 
       <div
-        className={chatReady ? "chat-log chat-log--ready" : "chat-log"}
+        className={[
+          "chat-log",
+          chatReady && !chatRevealed ? "chat-log--settling" : "",
+          chatRevealed ? "chat-log--ready" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         ref={logRef}
-        aria-busy={!chatReady}
+        aria-busy={!chatRevealed}
         onClick={() => setMenu(null)}
         onScroll={() => {
           const el = logRef.current;
@@ -1153,31 +1177,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           stickToBottom.current = isNearBottom(el);
         }}
       >
-        {!chatReady ? (
-          <div className="chat-skeleton" aria-hidden>
-            <div className="chat-skeleton__row chat-skeleton__row--theirs">
-              <span className="chat-skeleton__avatar" />
-              <span className="chat-skeleton__bubble" style={{ width: "62%" }} />
-            </div>
-            <div className="chat-skeleton__row chat-skeleton__row--mine">
-              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "48%" }} />
-            </div>
-            <div className="chat-skeleton__row chat-skeleton__row--theirs">
-              <span className="chat-skeleton__avatar" />
-              <span className="chat-skeleton__bubble" style={{ width: "74%" }} />
-            </div>
-            <div className="chat-skeleton__row chat-skeleton__row--mine">
-              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "56%" }} />
-            </div>
-            <div className="chat-skeleton__row chat-skeleton__row--theirs">
-              <span className="chat-skeleton__avatar" />
-              <span className="chat-skeleton__bubble" style={{ width: "40%" }} />
-            </div>
-            <div className="chat-skeleton__row chat-skeleton__row--mine">
-              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "68%" }} />
-            </div>
-          </div>
-        ) : null}
         {chatReady && messages.length === 0 ? (
           <p className="chat-empty">Напишите первое сообщение любимому человеку.</p>
         ) : null}
@@ -1211,7 +1210,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               {!mine ? (
                 <div className="chat-row__avatar">
                   {lastInGroup ? (
-                    <Avatar name={m.author.displayName} src={m.author.avatarPath} size="sm" />
+                    <UserAvatar
+                      name={m.author.displayName}
+                      src={m.author.avatarPath}
+                      size="sm"
+                      onClick={() => openMiniProfile(m.author.id)}
+                    />
                   ) : null}
                 </div>
               ) : null}
@@ -1817,7 +1821,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               {profileError ? <p className="error-text">{profileError}</p> : null}
 
               <label className="chat-profile-sheet__avatar">
-                <Avatar
+                <UserAvatar
                   name={nameDraft || profile?.displayName || "Вы"}
                   src={avatarPreview || profile?.avatarPath}
                   size="xl"
@@ -1860,6 +1864,67 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           </div>
         </div>
       ) : null}
+
+      <MiniProfile
+        open={miniProfileOpen}
+        focusUserId={miniFocusId}
+        onClose={() => {
+          setMiniProfileOpen(false);
+          void (async () => {
+            try {
+              const res = await fetch("/api/couple");
+              const json = await res.json();
+              const members = json.membership?.couple?.members as
+                | {
+                    userId: string;
+                    user: {
+                      id: string;
+                      displayName: string;
+                      avatarPath: string | null;
+                    };
+                  }[]
+                | undefined;
+              if (!members || !me) return;
+              const mine = members.find((m) => m.userId === me)?.user;
+              const theirs = members.find((m) => m.userId !== me)?.user;
+              if (mine) {
+                setProfile({
+                  id: mine.id,
+                  displayName: mine.displayName,
+                  avatarPath: mine.avatarPath,
+                });
+                setNameDraft(mine.displayName);
+              }
+              if (theirs) {
+                setPartnerLive({
+                  displayName: theirs.displayName,
+                  avatarPath: theirs.avatarPath,
+                });
+              }
+            } catch {
+              /* ignore */
+            }
+          })();
+        }}
+        onProfileUpdated={(user) => {
+          setProfile(user);
+          setNameDraft(user.displayName);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.author.id === user.id
+                ? {
+                    ...m,
+                    author: {
+                      ...m.author,
+                      displayName: user.displayName,
+                      avatarPath: user.avatarPath,
+                    },
+                  }
+                : m,
+            ),
+          );
+        }}
+      />
     </div>
   );
 }

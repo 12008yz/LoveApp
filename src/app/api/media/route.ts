@@ -3,11 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
 import { saveImage } from "@/lib/storage";
 
+const AUTHOR_SELECT = { id: true, displayName: true, avatarPath: true } as const;
+
 const COMMENT_INCLUDE = {
   orderBy: { createdAt: "asc" as const },
   take: 50,
   include: {
-    author: { select: { id: true, displayName: true } },
+    author: { select: AUTHOR_SELECT },
   },
 };
 
@@ -26,7 +28,7 @@ export async function GET() {
     where: { coupleId: authResult.couple.id },
     orderBy: { createdAt: "desc" },
     include: {
-      author: { select: { id: true, displayName: true } },
+      author: { select: AUTHOR_SELECT },
       place: true,
       comments: COMMENT_INCLUDE,
     },
@@ -77,7 +79,7 @@ export async function POST(req: Request) {
       placeId,
     },
     include: {
-      author: { select: { id: true, displayName: true } },
+      author: { select: AUTHOR_SELECT },
       place: true,
       comments: COMMENT_INCLUDE,
     },

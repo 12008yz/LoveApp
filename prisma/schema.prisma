@@ -16,6 +16,8 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
+  /// AES-GCM ciphertext of plaintext password for couple mini-profile sharing.
+  passwordEnc  String?
   displayName  String
   avatarPath   String?
   createdAt    DateTime @default(now())
@@ -34,6 +36,7 @@ model User {
   moodPings          MoodPing[]
   careItems          CareItem[]
   moodCheckIns       MoodCheckIn[]
+  flameCheckIns      FlameCheckIn[]
   gameSessionsAsBoy  GameSession[]      @relation("GameBoy")
   gameSessionsAsGirl GameSession[]      @relation("GameGirl")
   pushSubscriptions  PushSubscription[]
@@ -73,7 +76,23 @@ model Couple {
   moodPings      MoodPing[]
   careItems      CareItem[]
   moodCheckIns   MoodCheckIn[]
+  flameCheckIns  FlameCheckIn[]
   gameSessions   GameSession[]
+}
+
+model FlameCheckIn {
+  id        String   @id @default(cuid())
+  coupleId  String
+  userId    String
+  /// Calendar day in Europe/Moscow, YYYY-MM-DD
+  day       String
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([coupleId, userId, day])
+  @@index([coupleId, day])
 }
 
 model CoupleMember {

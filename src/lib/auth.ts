@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { DEMO_USER, isDemoMode } from "@/lib/demo-mode";
+import { encryptPassword } from "@/lib/password-share";
 import { prisma } from "@/lib/prisma";
 
 const credentialsSchema = z.object({
@@ -50,6 +51,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!ok) return null;
+
+        // Refresh couple-share ciphertext so partners can see login/password.
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { passwordEnc: encryptPassword(parsed.data.password) },
+          });
+        } catch {
+          /* login still ok if share ciphertext fails */
+        }
 
         return {
           id: user.id,

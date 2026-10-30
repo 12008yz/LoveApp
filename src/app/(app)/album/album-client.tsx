@@ -3,8 +3,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
+import { MiniProfile } from "@/components/mini-profile";
+import { UserAvatar } from "@/components/user-avatar";
 
-type Author = { id: string; displayName: string };
+type Author = { id: string; displayName: string; avatarPath?: string | null };
 
 type Comment = {
   id: string;
@@ -44,6 +46,13 @@ export function AlbumClient({ meId }: { meId: string }) {
   const [busyComment, setBusyComment] = useState<string | null>(null);
   const [viewer, setViewer] = useState<Item | null>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const [miniOpen, setMiniOpen] = useState(false);
+  const [miniFocus, setMiniFocus] = useState<string | null>(null);
+
+  function openMini(userId: string) {
+    setMiniFocus(userId);
+    setMiniOpen(true);
+  }
 
   function normalizeItem(raw: Partial<Item> & { id: string }): Item {
     const comments = Array.isArray(raw.comments) ? raw.comments : [];
@@ -83,7 +92,7 @@ export function AlbumClient({ meId }: { meId: string }) {
 
   useEffect(() => {
     if (!viewer) return;
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") setViewer(null);
     };
     const prev = document.body.style.overflow;
@@ -246,7 +255,15 @@ export function AlbumClient({ meId }: { meId: string }) {
                   style={listEnterStyle(i)}
                 >
                   <header className="album-post__head">
-                    <span className="album-post__author">{item.author.displayName}</span>
+                    <div className="album-post__who">
+                      <UserAvatar
+                        name={item.author.displayName}
+                        src={item.author.avatarPath}
+                        size="sm"
+                        onClick={() => openMini(item.author.id)}
+                      />
+                      <span className="album-post__author">{item.author.displayName}</span>
+                    </div>
                     <span className="album-post__meta">{formatWhen(item.createdAt)}</span>
                   </header>
                   <button
@@ -298,12 +315,13 @@ export function AlbumClient({ meId }: { meId: string }) {
                           const name = c.author?.displayName || "…";
                           return (
                             <li key={c.id} className="album-comments__item">
-                              <span
-                                className="chat-avatar chat-avatar--sm chat-avatar--fallback album-comments__avatar"
-                                aria-hidden
-                              >
-                                {(name === "…" ? "?" : name).slice(0, 1).toUpperCase()}
-                              </span>
+                              <UserAvatar
+                                name={name}
+                                src={c.author?.avatarPath}
+                                size="sm"
+                                className="album-comments__avatar"
+                                onClick={() => openMini(c.author?.id || c.authorId)}
+                              />
                               <div className="album-comments__bubble">
                                 <p>
                                   <strong>{name}</strong> {c.body}
@@ -397,6 +415,45 @@ export function AlbumClient({ meId }: { meId: string }) {
             document.body,
           )
         : null}
+
+      <MiniProfile
+        open={miniOpen}
+        focusUserId={miniFocus}
+        onClose={() => setMiniOpen(false)}
+        onProfileUpdated={(user) => {
+          const patchAuthor = (a?: Author | null): Author | null | undefined => {
+            if (!a || a.id !== user.id) return a;
+            return {
+              ...a,
+              displayName: user.displayName,
+              avatarPath: user.avatarPath,
+            };
+          };
+          setItems((prev) =>
+            prev.map((item) => ({
+              ...item,
+              author: patchAuthor(item.author) || item.author,
+              comments: item.comments.map((c) => {
+                const mine = c.authorId === user.id || c.author?.id === user.id;
+                if (!mine) return c;
+                return {
+                  ...c,
+                  author: {
+                    id: user.id,
+                    displayName: user.displayName,
+                    avatarPath: user.avatarPath,
+                  },
+                };
+              }),
+            })),
+          );
+          setViewer((v) => {
+            if (!v) return v;
+            const author = patchAuthor(v.author);
+            return author ? { ...v, author } : v;
+          });
+        }}
+      />
     </div>
   );
 }

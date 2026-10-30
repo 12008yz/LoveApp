@@ -489,6 +489,7 @@ export function createDemoPrisma() {
     "message",
     "messageAttachment",
     "messageReaction",
+    "flameCheckIn",
     "diaryEntry",
     "event",
     "letter",

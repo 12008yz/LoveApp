@@ -4,6 +4,7 @@ import {
   DEMO_PARTNER,
   DEMO_USER,
 } from "@/lib/demo-mode";
+import { encryptPassword } from "@/lib/password-share";
 
 export type DemoRow = Record<string, unknown> & { id: string };
 
@@ -14,6 +15,7 @@ type Store = {
   message: DemoRow[];
   messageAttachment: DemoRow[];
   messageReaction: DemoRow[];
+  flameCheckIn: DemoRow[];
   diaryEntry: DemoRow[];
   event: DemoRow[];
   letter: DemoRow[];
@@ -45,6 +47,7 @@ function seed(): Store {
       email: DEMO_USER.email,
       displayName: DEMO_USER.displayName,
       passwordHash: "demo",
+      passwordEnc: encryptPassword(DEMO_USER.password),
       avatarPath: null,
       createdAt: yesterday,
       lastSeenAt: null,
@@ -54,6 +57,7 @@ function seed(): Store {
       email: DEMO_PARTNER.email,
       displayName: DEMO_PARTNER.displayName,
       passwordHash: "demo",
+      passwordEnc: encryptPassword(DEMO_USER.password),
       avatarPath: null,
       createdAt: yesterday,
       lastSeenAt: null,
@@ -278,6 +282,7 @@ function seed(): Store {
     message,
     messageAttachment: [],
     messageReaction: [],
+    flameCheckIn: [],
     diaryEntry,
     event,
     letter,
@@ -303,6 +308,7 @@ export function getDemoStore(): Store {
   if (!store.mediaComment) store.mediaComment = [];
   if (!store.messageAttachment) store.messageAttachment = [];
   if (!store.messageReaction) store.messageReaction = [];
+  if (!store.flameCheckIn) store.flameCheckIn = [];
   return store;
 }
 

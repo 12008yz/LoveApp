@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { isDemoMode } from "@/lib/demo-mode";
+import { encryptPassword } from "@/lib/password-share";
 import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
 import { saveImage } from "@/lib/storage";
@@ -21,6 +23,10 @@ const nameSchema = z.object({
   displayName: z.string().min(1).max(40),
 });
 
+const passwordSchema = z.object({
+  password: z.string().min(6).max(100),
+});
+
 export async function PATCH(req: Request) {
   const authResult = await requireCoupleApi();
   if ("error" in authResult) return authResult.error;
@@ -30,15 +36,31 @@ export async function PATCH(req: Request) {
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
     const displayNameRaw = String(form.get("displayName") || "").trim();
+    const passwordRaw = String(form.get("password") || "");
     const file = form.get("avatar");
 
-    const data: { displayName?: string; avatarPath?: string } = {};
+    const data: {
+      displayName?: string;
+      avatarPath?: string;
+      passwordHash?: string;
+      passwordEnc?: string;
+    } = {};
+
     if (displayNameRaw) {
       const parsed = nameSchema.safeParse({ displayName: displayNameRaw });
       if (!parsed.success) {
         return NextResponse.json({ error: "Имя 1–40 символов" }, { status: 400 });
       }
       data.displayName = parsed.data.displayName;
+    }
+
+    if (passwordRaw) {
+      const parsed = passwordSchema.safeParse({ password: passwordRaw });
+      if (!parsed.success) {
+        return NextResponse.json({ error: "Пароль минимум 6 символов" }, { status: 400 });
+      }
+      data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
+      data.passwordEnc = encryptPassword(parsed.data.password);
     }
 
     if (file instanceof File && file.size > 0) {
@@ -74,7 +96,24 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ user });
   }
 
-  const parsed = nameSchema.safeParse(await req.json().catch(() => null));
+  const json = await req.json().catch(() => null);
+  if (json && typeof json === "object" && "password" in json && !("displayName" in json)) {
+    const parsed = passwordSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Пароль минимум 6 символов" }, { status: 400 });
+    }
+    const user = await prisma.user.update({
+      where: { id: authResult.user.id },
+      data: {
+        passwordHash: await bcrypt.hash(parsed.data.password, 10),
+        passwordEnc: encryptPassword(parsed.data.password),
+      },
+      select: { id: true, displayName: true, email: true, avatarPath: true },
+    });
+    return NextResponse.json({ user });
+  }
+
+  const parsed = nameSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Имя 1–40 символов" }, { status: 400 });
   }

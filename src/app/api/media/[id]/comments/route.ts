@@ -34,7 +34,7 @@ export async function POST(req: Request, ctx: Ctx) {
       body: parsed.data.body,
     },
     include: {
-      author: { select: { id: true, displayName: true } },
+      author: { select: { id: true, displayName: true, avatarPath: true } },
     },
   });
 

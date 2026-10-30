@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { encryptPassword } from "@/lib/password-share";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
     data: {
       email,
       passwordHash,
+      passwordEnc: encryptPassword(parsed.data.password),
       displayName: parsed.data.displayName.trim(),
     },
     select: { id: true, email: true, displayName: true },
