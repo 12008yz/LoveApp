@@ -1019,11 +1019,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                       </time>
                       {mine ? (
                         <span
-                          className={m.readAt ? "chat-checks chat-checks--read" : "chat-checks"}
-                          aria-label={m.readAt ? "Прочитано" : "Отправлено"}
-                        >
-                          {m.readAt ? "✓✓" : "✓"}
-                        </span>
+                          className={
+                            m.readAt ? "chat-read-dot chat-read-dot--read" : "chat-read-dot"
+                          }
+                          aria-label={m.readAt ? "Прочитано" : "Не прочитано"}
+                          title={m.readAt ? "Прочитано" : "Не прочитано"}
+                        />
                       ) : null}
                     </span>
                   </div>
