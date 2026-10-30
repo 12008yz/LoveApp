@@ -43,6 +43,9 @@ type MenuState = {
 
 const GROUP_GAP_MS = 5 * 60_000;
 const LONG_PRESS_MS = 420;
+/** Gap between two short taps; must stay below LONG_PRESS_MS. */
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_REACTION = CHAT_REACTIONS[0];
 const FOCUS_MENU_ESTIMATE = 268;
 const FOCUS_REACTIONS_H = 52;
 /** fly 0.88s + last particle delay (~168ms) */
@@ -332,6 +335,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const stickToBottom = useRef(true);
   const didInitialScroll = useRef(false);
   const reactingIds = useRef(new Set<string>());
+  const lastTap = useRef<{ id: string; at: number } | null>(null);
 
   function isNearBottom(el: HTMLElement, threshold = 100) {
     return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
@@ -754,6 +758,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   }, [menu]);
 
   function openMessageMenu(messageId: string, mine: boolean) {
+    lastTap.current = null;
     window.getSelection()?.removeAllRanges();
     try {
       navigator.vibrate?.(12);
@@ -803,6 +808,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     pressStart.current = { x: clientX, y: clientY };
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
+      lastTap.current = null;
       openMessageMenu(messageId, mine);
       pressTimer.current = null;
     }, LONG_PRESS_MS);
@@ -815,15 +821,37 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (dx > 14 || dy > 14) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
+      lastTap.current = null;
     }
   }
 
-  function endPress() {
+  function endPress(messageId: string) {
+    // Short press only — long-press already opened the menu (timer cleared).
+    const wasShortPress = Boolean(pressTimer.current);
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
     pressStart.current = null;
+    if (!wasShortPress) return;
+
+    const now = Date.now();
+    if (lastTap.current?.id === messageId && now - lastTap.current.at <= DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      void ensureHeartReaction(messageId);
+      return;
+    }
+    lastTap.current = { id: messageId, at: now };
+  }
+
+  /** Double-tap adds ❤️; if already yours, just replay the burst (don't remove). */
+  async function ensureHeartReaction(messageId: string) {
+    const prevMsg = messages.find((m) => m.id === messageId);
+    if (prevMsg?.reactions?.some((r) => r.emoji === DOUBLE_TAP_REACTION && r.me)) {
+      playReactBurst(messageId, DOUBLE_TAP_REACTION);
+      return;
+    }
+    await toggleReaction(messageId, DOUBLE_TAP_REACTION);
   }
 
   const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
@@ -1011,13 +1039,24 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     e.preventDefault();
                     openMessageMenu(m.id, mine);
                   }}
+                  onDoubleClick={(e) => {
+                    // Native dblclick selects text; we handle heart via pointer taps instead.
+                    e.preventDefault();
+                  }}
                   onPointerDown={(e) => {
                     if (e.pointerType === "mouse" && e.button !== 0) return;
                     startPress(m.id, mine, e.clientX, e.clientY);
                   }}
                   onPointerMove={(e) => movePress(e.clientX, e.clientY)}
-                  onPointerUp={endPress}
-                  onPointerCancel={endPress}
+                  onPointerUp={() => endPress(m.id)}
+                  onPointerCancel={() => {
+                    if (pressTimer.current) {
+                      clearTimeout(pressTimer.current);
+                      pressTimer.current = null;
+                    }
+                    pressStart.current = null;
+                    lastTap.current = null;
+                  }}
                 >
                   {m.replyTo ? (
                     <button
