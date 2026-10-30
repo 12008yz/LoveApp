@@ -494,18 +494,31 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (!didInitialScroll.current) {
       didInitialScroll.current = true;
       stickToBottom.current = true;
-      requestAnimationFrame(() => {
+      const id1 = requestAnimationFrame(() => {
         scrollLogToBottom();
         requestAnimationFrame(scrollLogToBottom);
       });
-      return;
+      return () => cancelAnimationFrame(id1);
     }
 
-    // Later updates: only follow if user is already at the bottom (or stickers opened).
-    if (stickToBottom.current || stickersOpen) {
-      requestAnimationFrame(scrollLogToBottom);
-    }
-  }, [messages.length, stickersOpen]);
+    // Later updates (incl. reactions expanding space): follow only if already at bottom.
+    if (!(stickToBottom.current || stickersOpen)) return;
+
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const id = requestAnimationFrame(() => {
+      if (cancelled) return;
+      scrollLogToBottom();
+      // Catch the reaction margin transition mid-way / near end.
+      timers.push(setTimeout(scrollLogToBottom, 40));
+      timers.push(setTimeout(scrollLogToBottom, 200));
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [messages, stickersOpen]);
 
   useEffect(() => {
     const el = textareaRef.current;
