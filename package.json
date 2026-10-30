@@ -17,7 +17,8 @@
     "docker:down": "docker compose down",
     "setup": "docker compose up -d && prisma db push",
     "tunnel": "lt --port 3000 --print-requests",
-    "dev:public": "npm run tunnel"
+    "dev:public": "npm run tunnel",
+    "art:optimize": "node scripts/optimize-art.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -46,6 +47,7 @@
     "eslint-config-next": "16.4.2",
     "localtunnel": "^2.0.2",
     "prisma": "^5.22.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^2.1.9"

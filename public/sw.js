@@ -1,8 +1,25 @@
-const CACHE = "loveapp-v4";
-const ASSETS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE = "loveapp-v5";
+const ASSETS = [
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  // Hot paths — warm cache on install (webp preferred; jpeg as fallback)
+  "/art/wallpaper-chat-tile.webp",
+  "/art/wallpaper-chat-tile.jpg",
+  "/art/wallpaper-diary.webp",
+  "/art/wallpaper-diary.jpg",
+  "/art/home-room.webp",
+  "/art/home-room.jpg",
+];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -28,22 +45,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache only static asset-like requests
+  // Cache static assets (icons, Next chunks, art, manifest, SW)
   const isStatic =
     url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/art/") ||
     url.pathname.startsWith("/_next/static/") ||
     url.pathname === "/manifest.webmanifest" ||
     url.pathname === "/sw.js";
 
   if (!isStatic) return;
 
+  // Art: ignore ?v=… so precache and CSS cache-bust share one entry
+  const cacheKey = url.pathname.startsWith("/art/")
+    ? url.origin + url.pathname
+    : request;
+
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(cacheKey).then((cached) => {
       const fetched = fetch(request)
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+            caches.open(CACHE).then((cache) => cache.put(cacheKey, copy)).catch(() => {});
           }
           return response;
         })

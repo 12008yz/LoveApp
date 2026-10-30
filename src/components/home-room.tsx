@@ -29,15 +29,18 @@ export function HomeRoom() {
         </p>
       ) : null}
       <div className="home-room__stage">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="home-room__art"
-          src="/art/home-room.jpg"
-          alt=""
-          width={768}
-          height={1024}
-          decoding="async"
-        />
+        <picture>
+          <source srcSet="/art/home-room.webp?v=6" type="image/webp" />
+          <img
+            className="home-room__art"
+            src="/art/home-room.jpg?v=6"
+            alt=""
+            width={768}
+            height={1024}
+            decoding="async"
+            fetchPriority="high"
+          />
+        </picture>
         {HOME_HOTSPOTS.map((spot) => (
           <Link
             key={spot.href}

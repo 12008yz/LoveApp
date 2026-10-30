@@ -9,8 +9,18 @@ export default async function LandingPage() {
 
   return (
     <section className="landing landing--cozy">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="landing__art" src="/art/landing-room.jpg" alt="" width={768} height={1024} />
+      <picture>
+        <source srcSet="/art/landing-room.webp?v=6" type="image/webp" />
+        <img
+          className="landing__art"
+          src="/art/landing-room.jpg?v=6"
+          alt=""
+          width={768}
+          height={1024}
+          decoding="async"
+          fetchPriority="high"
+        />
+      </picture>
       <div className="landing__scrim" aria-hidden />
       <div className="hero-copy">
         <p className="brand-hero">LoveApp</p>

@@ -212,15 +212,35 @@ select {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background:
-    center / cover no-repeat url("/art/auth-window.jpg"),
+  background-color: transparent;
+  background-image:
+    url("/art/auth-window.jpg?v=6"),
     linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+  background-image:
+    image-set(
+      url("/art/auth-window.webp?v=6") type("image/webp"),
+      url("/art/auth-window.jpg?v=6") type("image/jpeg")
+    ),
+    linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+  background-size: cover, auto;
+  background-position: center, 0 0;
+  background-repeat: no-repeat, no-repeat;
 }
 
 .onboard-shell--waiting::before {
-  background:
-    center / cover no-repeat url("/art/waiting-seat.jpg"),
+  background-color: transparent;
+  background-image:
+    url("/art/waiting-seat.jpg?v=6"),
     linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+  background-image:
+    image-set(
+      url("/art/waiting-seat.webp?v=6") type("image/webp"),
+      url("/art/waiting-seat.jpg?v=6") type("image/jpeg")
+    ),
+    linear-gradient(160deg, #fff8f4 0%, #f7ebe4 55%, #f3e2e6 100%);
+  background-size: cover, auto;
+  background-position: center, 0 0;
+  background-repeat: no-repeat, no-repeat;
 }
 
 .auth-shell::after,
@@ -540,7 +560,11 @@ select {
   height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
   max-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
   background-color: var(--paper);
-  background-image: url("/art/wallpaper-chat-tile.jpg?v=5");
+  background-image: url("/art/wallpaper-chat-tile.jpg?v=6");
+  background-image: image-set(
+    url("/art/wallpaper-chat-tile.webp?v=6") type("image/webp"),
+    url("/art/wallpaper-chat-tile.jpg?v=6") type("image/jpeg")
+  );
   background-size: 360px auto;
   background-repeat: repeat;
   background-position: 0 0;
@@ -717,6 +741,7 @@ select {
   /* Reserve reaction slot via padding so layout eases without fighting scroll */
   padding-bottom: 0;
   transition: padding-bottom 0.32s var(--ease);
+  /* No paint containment — reaction burst particles overflow the wrap */
 }
 
 .chat-row--mine .chat-bubble-wrap {
@@ -1635,6 +1660,12 @@ select {
 
 .chat-row--first {
   margin-top: 0.5rem;
+}
+
+/* Skip offscreen message layout/paint work in long threads */
+.chat-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4.5rem;
 }
 
 .chat-row__avatar {
@@ -2680,7 +2711,11 @@ select {
   padding: 1rem 1rem 1.25rem;
   min-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom) - 2rem);
   background-color: var(--paper);
-  background-image: url("/art/wallpaper-diary.jpg");
+  background-image: url("/art/wallpaper-diary.jpg?v=6");
+  background-image: image-set(
+    url("/art/wallpaper-diary.webp?v=6") type("image/webp"),
+    url("/art/wallpaper-diary.jpg?v=6") type("image/jpeg")
+  );
   background-size: 320px auto;
   background-repeat: repeat;
   background-position: center top;
