@@ -204,6 +204,10 @@ function TrashIcon() {
   );
 }
 
+function pinPreviewText(body: string) {
+  return body.replace(/\s+/g, " ").trim();
+}
+
 function buildMenuState(messageId: string, mine: boolean): MenuState {
   const bubble = document
     .querySelector(`[data-message-id="${messageId}"] .chat-bubble`)
@@ -331,9 +335,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     : null;
   const pinnedBar =
     pinnedFromList
-      ? { id: pinnedFromList.id, body: pinnedFromList.body }
+      ? { id: pinnedFromList.id, body: pinPreviewText(pinnedFromList.body) }
       : pinnedMessageId && pinnedPreview?.id === pinnedMessageId
-        ? { id: pinnedPreview.id, body: pinnedPreview.body }
+        ? { id: pinnedPreview.id, body: pinPreviewText(pinnedPreview.body) }
         : null;
 
   const subtitle = useMemo(() => {
@@ -350,7 +354,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       setHighlightId(id);
-      window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1600);
+      window.setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1400);
       return true;
     }
     return false;
@@ -627,6 +631,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   async function setPin(messageId: string | null) {
     setMenu(null);
+    const log = logRef.current;
+    const keepScroll = log?.scrollTop ?? null;
     const res = await fetch("/api/chat/pin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -645,6 +651,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       const m = messages.find((x) => x.id === id);
       if (m) setPinnedPreview({ id: m.id, body: m.body, authorName: m.author.displayName });
     }
+    // Keep the thread from jumping when the compact pin strip appears/disappears.
+    requestAnimationFrame(() => {
+      if (log && keepScroll != null) log.scrollTop = keepScroll;
+    });
   }
 
   async function runSearch(q: string) {
@@ -890,7 +900,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   ) : null}
                 </div>
               ) : null}
-              <div className="chat-bubble-wrap">
+              <div
+                className={
+                  m.reactions?.length ? "chat-bubble-wrap chat-bubble-wrap--reacted" : "chat-bubble-wrap"
+                }
+              >
                 <div
                   className={[
                     "chat-bubble",
@@ -958,6 +972,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                         type="button"
                         className={r.me ? "chat-reactions__btn is-me" : "chat-reactions__btn"}
                         onClick={() => void toggleReaction(m.id, r.emoji)}
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
                         {r.emoji}
                         {r.count > 1 ? <span>{r.count}</span> : null}
