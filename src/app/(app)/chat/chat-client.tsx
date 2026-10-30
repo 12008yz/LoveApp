@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
   useCallback,
@@ -318,6 +319,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [reactBurst, setReactBurst] = useState<ReactBurst | null>(null);
+  const [chatReady, setChatReady] = useState(false);
   const [tick, setTick] = useState(0);
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -380,12 +382,18 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const res = await fetch("/api/messages");
-      const json = await res.json();
-      if (!cancelled) {
-        setMessages(json.messages || []);
-        setPinnedMessageId(json.pinnedMessageId ?? null);
-        setPinnedPreview(json.pinnedPreview ?? null);
+      try {
+        const res = await fetch("/api/messages");
+        const json = await res.json();
+        if (!cancelled) {
+          setMessages(json.messages || []);
+          setPinnedMessageId(json.pinnedMessageId ?? null);
+          setPinnedPreview(json.pinnedPreview ?? null);
+        }
+      } catch {
+        /* keep empty; still leave loading */
+      } finally {
+        if (!cancelled) setChatReady(true);
       }
     }
     async function loadProfile() {
@@ -520,6 +528,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   function clearComposerExtras() {
     setReplyTo(null);
     setEditingId(null);
+    setText("");
   }
 
   function scheduleTyping() {
@@ -547,7 +556,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
         }
         clearComposerExtras();
-        setText("");
         return;
       }
 
@@ -565,7 +573,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
       }
-      setText("");
       // After send (including sticker-as-reply), clear reply/edit chrome like Telegram.
       clearComposerExtras();
     } catch (err) {
@@ -589,7 +596,6 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     }
     if (e.key === "Escape" && (editingId || replyTo)) {
       clearComposerExtras();
-      setText("");
     }
   }
 
@@ -888,8 +894,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       ) : null}
 
       <div
-        className="chat-log"
+        className={chatReady ? "chat-log chat-log--ready" : "chat-log"}
         ref={logRef}
+        aria-busy={!chatReady}
         onClick={() => setMenu(null)}
         onScroll={() => {
           const el = logRef.current;
@@ -897,10 +904,36 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           stickToBottom.current = isNearBottom(el);
         }}
       >
-        {messages.length === 0 ? (
+        {!chatReady ? (
+          <div className="chat-skeleton" aria-hidden>
+            <div className="chat-skeleton__row chat-skeleton__row--theirs">
+              <span className="chat-skeleton__avatar" />
+              <span className="chat-skeleton__bubble" style={{ width: "62%" }} />
+            </div>
+            <div className="chat-skeleton__row chat-skeleton__row--mine">
+              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "48%" }} />
+            </div>
+            <div className="chat-skeleton__row chat-skeleton__row--theirs">
+              <span className="chat-skeleton__avatar" />
+              <span className="chat-skeleton__bubble" style={{ width: "74%" }} />
+            </div>
+            <div className="chat-skeleton__row chat-skeleton__row--mine">
+              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "56%" }} />
+            </div>
+            <div className="chat-skeleton__row chat-skeleton__row--theirs">
+              <span className="chat-skeleton__avatar" />
+              <span className="chat-skeleton__bubble" style={{ width: "40%" }} />
+            </div>
+            <div className="chat-skeleton__row chat-skeleton__row--mine">
+              <span className="chat-skeleton__bubble chat-skeleton__bubble--mine" style={{ width: "68%" }} />
+            </div>
+          </div>
+        ) : null}
+        {chatReady && messages.length === 0 ? (
           <p className="chat-empty">Напишите первое сообщение любимому человеку.</p>
         ) : null}
-        {rows.map((row) => {
+        {chatReady
+          ? rows.map((row) => {
           if (row.kind === "day") {
             return (
               <div key={row.key} className="chat-day">
@@ -1043,7 +1076,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               </div>
             </div>
           );
-        })}
+        })
+          : null}
       </div>
 
       {portalReady && menu && menuMessage
@@ -1103,10 +1137,16 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     : undefined,
                 }}
               >
-                {CHAT_REACTIONS.map((emoji) => (
+                {CHAT_REACTIONS.map((emoji, i) => (
                   <button
                     key={emoji}
                     type="button"
+                    style={
+                      {
+                        ["--i" as string]: i,
+                        ["--wiggle" as string]: `${i % 2 === 0 ? -6 : 6}deg`,
+                      } as CSSProperties
+                    }
                     onClick={() => void toggleReaction(menuMessage.id, emoji)}
                   >
                     {emoji}
