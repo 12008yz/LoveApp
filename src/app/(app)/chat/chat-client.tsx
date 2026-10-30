@@ -649,6 +649,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   async function toggleReaction(messageId: string, emoji: string) {
     setMenu(null);
     window.getSelection()?.removeAllRanges();
+    // Lock absorbs ghost click after pointerdown so we don't add+remove in one tap.
     if (reactingIds.current.has(messageId)) return;
     reactingIds.current.add(messageId);
     const prevMsg = messages.find((m) => m.id === messageId);
@@ -674,8 +675,23 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     } catch {
       setError("Реакция не сохранилась");
     } finally {
-      reactingIds.current.delete(messageId);
+      window.setTimeout(() => reactingIds.current.delete(messageId), 320);
     }
+  }
+
+  /** Instant press for pointer; keyboard still uses click (detail === 0). */
+  function onReactionPress(
+    e: { button: number; detail?: number; preventDefault: () => void; stopPropagation: () => void },
+    messageId: string,
+    emoji: string,
+    source: "pointer" | "click",
+  ) {
+    if (source === "pointer" && e.button !== 0) return;
+    // Ignore synthetic mouse click after pointerdown — keyboard clicks have detail 0.
+    if (source === "click" && (e.detail ?? 0) !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void toggleReaction(messageId, emoji);
   }
 
   async function setPin(messageId: string | null) {
@@ -1077,8 +1093,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                         ]
                           .filter(Boolean)
                           .join(" ")}
-                        onClick={() => void toggleReaction(m.id, r.emoji)}
-                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => onReactionPress(e, m.id, r.emoji, "pointer")}
+                        onClick={(e) => onReactionPress(e, m.id, r.emoji, "click")}
                       >
                         {r.emoji}
                         <span>{r.count}</span>
@@ -1160,7 +1176,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                         ["--wiggle" as string]: `${i % 2 === 0 ? -6 : 6}deg`,
                       } as CSSProperties
                     }
-                    onClick={() => void toggleReaction(menuMessage.id, emoji)}
+                    onPointerDown={(e) =>
+                      onReactionPress(e, menuMessage.id, emoji, "pointer")
+                    }
+                    onClick={(e) => onReactionPress(e, menuMessage.id, emoji, "click")}
                   >
                     {emoji}
                   </button>

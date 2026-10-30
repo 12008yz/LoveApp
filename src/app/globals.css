@@ -856,6 +856,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1155,12 +1156,14 @@ select {
   background: transparent;
   font-size: 1.28rem;
   cursor: pointer;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  opacity: 0;
-  transform: scale(0.5) translateY(6px);
+  /* Visible immediately so a quick tap registers — entrance is a soft pop, not a delayed reveal */
+  opacity: 1;
+  transform: scale(1);
   animation:
-    chat-focus-emoji-in 380ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 45ms) both,
-    chat-focus-emoji-idle 1.8s ease-in-out calc(0.4s + var(--i, 0) * 90ms) infinite;
+    chat-focus-emoji-in 220ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 20ms) both,
+    chat-focus-emoji-idle 1.8s ease-in-out calc(0.28s + var(--i, 0) * 90ms) infinite;
 }
 
 .chat-focus__reactions button:hover,
@@ -1179,8 +1182,8 @@ select {
 
 @keyframes chat-focus-emoji-in {
   from {
-    opacity: 0;
-    transform: scale(0.45) translateY(8px);
+    opacity: 0.85;
+    transform: scale(0.88) translateY(4px);
   }
   to {
     opacity: 1;
