@@ -44,6 +44,15 @@ const GROUP_GAP_MS = 5 * 60_000;
 const LONG_PRESS_MS = 420;
 const FOCUS_MENU_ESTIMATE = 268;
 const FOCUS_REACTIONS_H = 52;
+/** fly 0.88s + last particle delay (~168ms) */
+const REACT_BURST_MS = 1100;
+const REACT_BURST_PARTICLES = 7;
+
+type ReactBurst = {
+  id: number;
+  messageId: string;
+  emoji: string;
+};
 
 function Avatar({
   name,
@@ -308,9 +317,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [reactBurst, setReactBurst] = useState<ReactBurst | null>(null);
   const [tick, setTick] = useState(0);
 
   const logRef = useRef<HTMLDivElement>(null);
+  const reactBurstId = useRef(0);
+  const reactBurstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
@@ -610,8 +622,26 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     }
   }
 
+  function playReactBurst(messageId: string, emoji: string) {
+    const id = ++reactBurstId.current;
+    if (reactBurstTimer.current) clearTimeout(reactBurstTimer.current);
+    setReactBurst({ id, messageId, emoji });
+    reactBurstTimer.current = setTimeout(() => {
+      setReactBurst((cur) => (cur?.id === id ? null : cur));
+      reactBurstTimer.current = null;
+    }, REACT_BURST_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (reactBurstTimer.current) clearTimeout(reactBurstTimer.current);
+    };
+  }, []);
+
   async function toggleReaction(messageId: string, emoji: string) {
     setMenu(null);
+    const prevMsg = messages.find((m) => m.id === messageId);
+    const wasMine = Boolean(prevMsg?.reactions?.some((r) => r.emoji === emoji && r.me));
     const res = await fetch(`/api/messages/${messageId}/reactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -622,11 +652,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       setError(json.error || "Реакция не сохранилась");
       return;
     }
+    const next = json.reactions as AggregatedReaction[];
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId ? { ...m, reactions: json.reactions as AggregatedReaction[] } : m,
-      ),
+      prev.map((m) => (m.id === messageId ? { ...m, reactions: next } : m)),
     );
+    const nowMine = next.some((r) => r.emoji === emoji && r.me);
+    if (!wasMine && nowMine) playReactBurst(messageId, emoji);
   }
 
   async function setPin(messageId: string | null) {
@@ -964,18 +995,47 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     </span>
                   </div>
                 </div>
+                {reactBurst?.messageId === m.id ? (
+                  <div
+                    className={`chat-react-burst${mine ? " chat-react-burst--mine" : ""}`}
+                    aria-hidden
+                  >
+                    {Array.from({ length: REACT_BURST_PARTICLES }, (_, i) => (
+                      <span
+                        key={`${reactBurst.id}-${i}`}
+                        className="chat-react-burst__p"
+                        style={{ ["--i" as string]: i }}
+                      >
+                        {reactBurst.emoji}
+                      </span>
+                    ))}
+                    <span className="chat-react-burst__ring" />
+                    <span className="chat-react-burst__spark" />
+                    <span className="chat-react-burst__spark chat-react-burst__spark--2" />
+                  </div>
+                ) : null}
                 {m.reactions?.length ? (
                   <div className={`chat-reactions ${mine ? "chat-reactions--mine" : ""}`}>
                     {m.reactions.map((r) => (
                       <button
                         key={r.emoji}
                         type="button"
-                        className={r.me ? "chat-reactions__btn is-me" : "chat-reactions__btn"}
+                        className={[
+                          "chat-reactions__btn",
+                          r.me ? "is-me" : "",
+                          reactBurst?.messageId === m.id &&
+                          reactBurst.emoji === r.emoji &&
+                          r.me
+                            ? "is-pop"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                         onClick={() => void toggleReaction(m.id, r.emoji)}
                         onPointerDown={(e) => e.stopPropagation()}
                       >
                         {r.emoji}
-                        {r.count > 1 ? <span>{r.count}</span> : null}
+                        <span>{r.count}</span>
                       </button>
                     ))}
                   </div>
