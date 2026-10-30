@@ -291,28 +291,39 @@ export function AlbumClient({ meId }: { meId: string }) {
                       </button>
                     ) : null}
 
-                    <ul className="album-comments">
-                      {visible.map((c) => {
-                        const mine = c.authorId === meId || c.author?.id === meId;
-                        return (
-                          <li key={c.id} className="album-comments__item">
-                            <p>
-                              <strong>{c.author?.displayName || "…"}</strong> {c.body}
-                            </p>
-                            {mine ? (
-                              <button
-                                type="button"
-                                className="album-comments__del"
-                                aria-label="Удалить комментарий"
-                                onClick={() => void deleteComment(item.id, c.id)}
+                    {visible.length > 0 ? (
+                      <ul className="album-comments">
+                        {visible.map((c) => {
+                          const mine = c.authorId === meId || c.author?.id === meId;
+                          const name = c.author?.displayName || "…";
+                          return (
+                            <li key={c.id} className="album-comments__item">
+                              <span
+                                className="chat-avatar chat-avatar--sm chat-avatar--fallback album-comments__avatar"
+                                aria-hidden
                               >
-                                ×
-                              </button>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                {(name === "…" ? "?" : name).slice(0, 1).toUpperCase()}
+                              </span>
+                              <div className="album-comments__bubble">
+                                <p>
+                                  <strong>{name}</strong> {c.body}
+                                </p>
+                              </div>
+                              {mine ? (
+                                <button
+                                  type="button"
+                                  className="album-comments__del"
+                                  aria-label="Удалить комментарий"
+                                  onClick={() => void deleteComment(item.id, c.id)}
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
 
                     <div className="album-comment-form">
                       <input

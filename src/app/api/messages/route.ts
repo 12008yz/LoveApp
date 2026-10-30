@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { requireCoupleApi } from "@/lib/session";
 import { notifyPartner } from "@/lib/push";
 import { clearTyping } from "@/lib/chat-typing";
-import { MESSAGE_INCLUDE, postMessageSchema, toMessageDto } from "@/lib/chat-messages";
+import {
+  MESSAGE_INCLUDE,
+  postMessageSchema,
+  pushPreviewForMessage,
+  toMessageDto,
+} from "@/lib/chat-messages";
 
 export async function GET(req: Request) {
   const authResult = await requireCoupleApi();
@@ -44,7 +49,7 @@ export async function GET(req: Request) {
     if (inList) {
       pinnedPreview = {
         id: inList.id,
-        body: inList.body,
+        body: pushPreviewForMessage(inList.body, inList.attachments),
         authorName: inList.author.displayName,
       };
     } else {
@@ -54,12 +59,13 @@ export async function GET(req: Request) {
           id: true,
           body: true,
           author: { select: { displayName: true } },
+          attachments: { select: { kind: true }, orderBy: { sortOrder: "asc" } },
         },
       });
       if (pinned) {
         pinnedPreview = {
           id: pinned.id,
-          body: pinned.body,
+          body: pushPreviewForMessage(pinned.body, pinned.attachments),
           authorName: pinned.author.displayName,
         };
       }
@@ -111,10 +117,9 @@ export async function POST(req: Request) {
 
   clearTyping(authResult.couple.id, authResult.user.id);
 
-  const preview = body.length > 80 ? `${body.slice(0, 77)}…` : body;
   void notifyPartner(authResult.couple.id, authResult.user.id, {
     title: message.author.displayName,
-    body: preview,
+    body: pushPreviewForMessage(body, message.attachments),
     url: "/chat",
   });
 

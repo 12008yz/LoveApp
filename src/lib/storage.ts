@@ -5,6 +5,9 @@ import { PutObjectCommand, S3Client, CreateBucketCommand, HeadBucketCommand } fr
 
 type EnvLike = Record<string, string | undefined>;
 
+const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif"] as const;
+const VIDEO_EXTS = ["mp4", "webm", "mov"] as const;
+
 export function s3Enabled(env: EnvLike = process.env) {
   return Boolean(
     env.S3_ENDPOINT &&
@@ -49,11 +52,40 @@ async function ensureBucket() {
   await bucketReady;
 }
 
-export async function saveImage(file: File): Promise<string> {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const safeExt = ["jpg", "jpeg", "png", "webp", "gif"].includes(ext) ? ext : "jpg";
+export type UploadKind = "image" | "video";
+
+export function classifyUpload(file: File): UploadKind | null {
+  const type = (file.type || "").toLowerCase();
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  if ((IMAGE_EXTS as readonly string[]).includes(ext)) return "image";
+  if ((VIDEO_EXTS as readonly string[]).includes(ext)) return "video";
+  return null;
+}
+
+function safeExtFor(kind: UploadKind, file: File): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  if (kind === "image") {
+    return (IMAGE_EXTS as readonly string[]).includes(ext) ? ext : "jpg";
+  }
+  if (ext === "mov" || ext === "quicktime") return "mov";
+  return (VIDEO_EXTS as readonly string[]).includes(ext) ? ext : "mp4";
+}
+
+export async function saveUpload(file: File, kind: UploadKind = "image"): Promise<string> {
+  const safeExt = safeExtFor(kind, file);
   const key = `${nanoid()}.${safeExt}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  const contentType =
+    file.type ||
+    (kind === "video"
+      ? safeExt === "webm"
+        ? "video/webm"
+        : safeExt === "mov"
+          ? "video/quicktime"
+          : "video/mp4"
+      : `image/${safeExt === "jpg" ? "jpeg" : safeExt}`);
 
   if (s3Enabled()) {
     await ensureBucket();
@@ -63,7 +95,7 @@ export async function saveImage(file: File): Promise<string> {
         Bucket: process.env.S3_BUCKET!,
         Key: key,
         Body: buffer,
-        ContentType: file.type || `image/${safeExt}`,
+        ContentType: contentType,
       }),
     );
     const base = process.env.S3_PUBLIC_URL!.replace(/\/$/, "");
@@ -74,6 +106,11 @@ export async function saveImage(file: File): Promise<string> {
   await mkdir(uploadDir, { recursive: true });
   await writeFile(path.join(uploadDir, key), buffer);
   return `/uploads/${key}`;
+}
+
+/** @deprecated Prefer saveUpload — kept for album/avatar callers. */
+export async function saveImage(file: File): Promise<string> {
+  return saveUpload(file, "image");
 }
 
 export function storageMode(env: EnvLike = process.env) {

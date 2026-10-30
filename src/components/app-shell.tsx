@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { MORE_NAV, PRIMARY_NAV } from "@/lib/constants";
 import { NavIcon } from "@/components/nav-icons";
-import { Button } from "@/components/ui";
 
 export function AppShell({
   children,
@@ -125,14 +123,6 @@ export function AppShell({
                 );
               })}
             </div>
-            <Button
-              variant="ghost"
-              block
-              onClick={() => signOut({ callbackUrl: "/" })}
-              style={{ marginTop: "1rem" }}
-            >
-              Выйти
-            </Button>
           </div>
         </div>
       ) : null}

@@ -93,7 +93,7 @@ model Message {
   id        String   @id @default(cuid())
   coupleId  String
   authorId  String
-  body      String
+  body      String   @default("")
   readAt    DateTime?
   createdAt DateTime @default(now())
   editedAt            DateTime?
@@ -102,15 +102,31 @@ model Message {
   /// Bumped on any reaction create/update/delete so SSE can sync removals.
   reactionsUpdatedAt  DateTime?
 
-  couple          Couple            @relation("CoupleMessages", fields: [coupleId], references: [id], onDelete: Cascade)
-  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  replyTo         Message?          @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]         @relation("MessageReply")
+  couple          Couple              @relation("CoupleMessages", fields: [coupleId], references: [id], onDelete: Cascade)
+  author          User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo         Message?            @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]           @relation("MessageReply")
   reactions       MessageReaction[]
-  pinnedByCouples Couple[]          @relation("CouplePin")
+  attachments     MessageAttachment[]
+  pinnedByCouples Couple[]            @relation("CouplePin")
 
   @@index([coupleId, createdAt])
   @@index([coupleId, editedAt])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  kind      String // image | video
+  filePath  String
+  mimeType  String
+  sizeBytes Int
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, sortOrder])
 }
 
 model MessageReaction {

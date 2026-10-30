@@ -12,6 +12,7 @@ type Store = {
   couple: DemoRow[];
   coupleMember: DemoRow[];
   message: DemoRow[];
+  messageAttachment: DemoRow[];
   messageReaction: DemoRow[];
   diaryEntry: DemoRow[];
   event: DemoRow[];
@@ -275,6 +276,7 @@ function seed(): Store {
     couple,
     coupleMember,
     message,
+    messageAttachment: [],
     messageReaction: [],
     diaryEntry,
     event,
@@ -299,6 +301,7 @@ export function getDemoStore(): Store {
   const store = globalThis.__loveDemoStore;
   // Hot-reload may keep an older in-memory store without newer collections.
   if (!store.mediaComment) store.mediaComment = [];
+  if (!store.messageAttachment) store.messageAttachment = [];
   if (!store.messageReaction) store.messageReaction = [];
   return store;
 }

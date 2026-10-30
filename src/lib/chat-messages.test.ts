@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateReactions,
+  mediaPreviewLabel,
   postMessageSchema,
+  pushPreviewForMessage,
   toMessageDto,
   truncateReplyPreview,
 } from "@/lib/chat-messages";
@@ -72,5 +74,43 @@ describe("truncateReplyPreview / toMessageDto", () => {
       authorId: "a2",
       author: { displayName: "Partner" },
     });
+    expect(dto.attachments).toEqual([]);
+  });
+
+  it("uses media label when reply body is empty", () => {
+    const dto = toMessageDto(
+      {
+        id: "m1",
+        coupleId: "c1",
+        authorId: "a1",
+        body: "ok",
+        createdAt: new Date("2026-10-29T12:00:00Z"),
+        author: { id: "a1", displayName: "Me", avatarPath: null },
+        replyTo: {
+          id: "m0",
+          body: "",
+          authorId: "a2",
+          author: { id: "a2", displayName: "Partner" },
+          attachments: [{ kind: "image" }, { kind: "video" }],
+        },
+        reactions: [],
+        attachments: [],
+      },
+      "a1",
+    );
+    expect(dto.replyTo?.body).toBe("Альбом · 2");
+  });
+});
+
+describe("mediaPreviewLabel / pushPreviewForMessage", () => {
+  it("labels single and album media", () => {
+    expect(mediaPreviewLabel([{ kind: "image" }])).toBe("Фото");
+    expect(mediaPreviewLabel([{ kind: "video" }])).toBe("Видео");
+    expect(mediaPreviewLabel([{ kind: "image" }, { kind: "image" }])).toBe("Альбом · 2");
+  });
+
+  it("prefers caption text for push preview", () => {
+    expect(pushPreviewForMessage("привет", [{ kind: "image" }])).toBe("привет");
+    expect(pushPreviewForMessage("  ", [{ kind: "video" }])).toBe("Видео");
   });
 });

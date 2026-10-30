@@ -165,6 +165,19 @@ function applyInclude(model: string, row: DemoRow, include?: Record<string, unkn
                 ? (val as { select: Record<string, boolean> }).select
                 : undefined;
             picked.author = author ? applySelect(author, authorSelect) : null;
+          } else if (key === "attachments") {
+            const attConf =
+              typeof val === "object" && val ? (val as Record<string, unknown>) : {};
+            let atts = store.messageAttachment.filter((a) => a.messageId === target.id);
+            const orderBy = attConf.orderBy as Record<string, "asc" | "desc"> | undefined;
+            atts = sortRows(atts, orderBy);
+            const take = typeof attConf.take === "number" ? attConf.take : undefined;
+            if (take != null) atts = atts.slice(0, take);
+            const attSelect =
+              typeof attConf.select === "object" && attConf.select
+                ? (attConf.select as Record<string, boolean>)
+                : undefined;
+            picked.attachments = atts.map((a) => applySelect(a, attSelect));
           } else {
             picked[key] = target[key];
           }
@@ -174,6 +187,7 @@ function applyInclude(model: string, row: DemoRow, include?: Record<string, unkn
         out.replyTo = {
           ...target,
           author: author ? { ...author } : null,
+          attachments: store.messageAttachment.filter((a) => a.messageId === target.id),
         };
       }
       continue;
@@ -181,6 +195,17 @@ function applyInclude(model: string, row: DemoRow, include?: Record<string, unkn
     if (rel === "reactions" && model === "message") {
       const rows = store.messageReaction.filter((r) => r.messageId === row.id);
       out.reactions = rows.map((r) => applySelect(r, select));
+      continue;
+    }
+    if (rel === "attachments" && model === "message") {
+      const confObj =
+        typeof conf === "object" && conf ? (conf as Record<string, unknown>) : {};
+      let rows = store.messageAttachment.filter((a) => a.messageId === row.id);
+      const orderBy = confObj.orderBy as Record<string, "asc" | "desc"> | undefined;
+      rows = sortRows(rows, orderBy);
+      const take = typeof confObj.take === "number" ? confObj.take : undefined;
+      if (take != null) rows = rows.slice(0, take);
+      out.attachments = rows.map((a) => applySelect(a, select));
       continue;
     }
     if (rel === "comments" && model === "mediaItem") {
@@ -381,6 +406,17 @@ function modelDelegate(model: keyof ReturnType<typeof getDemoStore>) {
             } as DemoRow);
           }
         }
+        if (nested.rel === "attachments" && model === "message") {
+          for (const item of nested.items) {
+            store.messageAttachment.push({
+              id: newDemoId("att"),
+              messageId: row.id,
+              createdAt: new Date(),
+              sortOrder: 0,
+              ...item,
+            } as DemoRow);
+          }
+        }
       }
 
       return presentRow(model, row, args);
@@ -451,6 +487,7 @@ export function createDemoPrisma() {
     "couple",
     "coupleMember",
     "message",
+    "messageAttachment",
     "messageReaction",
     "diaryEntry",
     "event",

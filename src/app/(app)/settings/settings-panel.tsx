@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PushSettings } from "@/components/push-settings";
@@ -41,6 +42,16 @@ export function SettingsPanel({
         )}
         <button type="button" className="ghost-btn" onClick={leaveCouple} disabled={busy}>
           {busy ? "Удаляем…" : "Удалить пару и данные"}
+        </button>
+      </div>
+      <div className="soft-panel" style={{ marginTop: "1rem" }}>
+        <h2 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>Аккаунт</h2>
+        <button
+          type="button"
+          className="ghost-btn"
+          onClick={() => signOut({ callbackUrl: "/" })}
+        >
+          Выйти
         </button>
       </div>
     </>

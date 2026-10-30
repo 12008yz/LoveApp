@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 180,
     },
+    // Chat media: up to 10 × 25MB videos via multipart route handlers
+    proxyClientMaxBodySize: "50mb",
+    serverActions: {
+      bodySizeLimit: "50mb",
+    },
   },
   async headers() {
     return [

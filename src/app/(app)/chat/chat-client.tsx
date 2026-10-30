@@ -15,7 +15,27 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { CHAT_REACTIONS, CHAT_STICKERS } from "@/lib/constants";
 import { formatLastSeen, isOnline } from "@/lib/chat-presence";
-import type { AggregatedReaction, MessageDto } from "@/lib/chat-messages";
+import {
+  CHAT_IMAGE_MAX_BYTES,
+  CHAT_MEDIA_MAX_FILES,
+  CHAT_VIDEO_MAX_BYTES,
+  mediaPreviewLabel,
+  type AggregatedReaction,
+  type AttachmentDto,
+  type MessageDto,
+} from "@/lib/chat-messages";
+
+type PendingMedia = {
+  id: string;
+  file: File;
+  kind: "image" | "video";
+  url: string;
+};
+
+type MediaViewerState = {
+  items: AttachmentDto[];
+  index: number;
+};
 
 type Partner = {
   id: string;
@@ -103,8 +123,15 @@ function sameDay(a: string, b: string) {
   return dayKey(a) === dayKey(b);
 }
 
-function isStickerBody(body: string) {
+function isStickerBody(body: string, attachments?: AttachmentDto[] | null) {
+  if (attachments?.length) return false;
   return body.length <= 8 && /\p{Extended_Pictographic}/u.test(body) && !/\n/.test(body);
+}
+
+function replyPreviewText(m: MessageDto) {
+  const trimmed = m.body.trim();
+  if (trimmed) return trimmed;
+  return mediaPreviewLabel(m.attachments) || "Сообщение";
 }
 
 function ChatSvgIcon({ children }: { children: ReactNode }) {
@@ -140,6 +167,14 @@ function SendIcon() {
     <ChatSvgIcon>
       <path d="M5 12h13" />
       <path d="m13 6 6 6-6 6" />
+    </ChatSvgIcon>
+  );
+}
+
+function AttachIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M21.4 11.6 12.1 20.9a5.5 5.5 0 0 1-7.8-7.8l9.9-9.9a3.5 3.5 0 0 1 5 5l-9.9 9.9a1.5 1.5 0 0 1-2.1-2.1l8.5-8.5" />
     </ChatSvgIcon>
   );
 }
@@ -324,6 +359,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [reactBurst, setReactBurst] = useState<ReactBurst | null>(null);
   const [chatReady, setChatReady] = useState(false);
   const [tick, setTick] = useState(0);
+  const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
+  const [mediaViewer, setMediaViewer] = useState<MediaViewerState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
   const reactBurstId = useRef(0);
@@ -354,7 +392,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     : null;
   const pinnedBar =
     pinnedFromList
-      ? { id: pinnedFromList.id, body: pinPreviewText(pinnedFromList.body) }
+      ? { id: pinnedFromList.id, body: pinPreviewText(replyPreviewText(pinnedFromList)) }
       : pinnedMessageId && pinnedPreview?.id === pinnedMessageId
         ? { id: pinnedPreview.id, body: pinPreviewText(pinnedPreview.body) }
         : null;
@@ -531,10 +569,86 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileOpen, avatarPreview]);
 
+  function clearPendingMedia() {
+    setPendingMedia((prev) => {
+      for (const item of prev) URL.revokeObjectURL(item.url);
+      return [];
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function clearComposerExtras() {
+    if (editingId) setText("");
     setReplyTo(null);
     setEditingId(null);
-    setText("");
+  }
+
+  function classifyLocalFile(file: File): "image" | "video" | null {
+    const type = (file.type || "").toLowerCase();
+    if (type.startsWith("image/")) return "image";
+    if (type.startsWith("video/")) return "video";
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "image";
+    if (["mp4", "webm", "mov"].includes(ext)) return "video";
+    return null;
+  }
+
+  function onPickMedia(files: FileList | null) {
+    if (!files?.length) return;
+    const candidates: { file: File; kind: "image" | "video" }[] = [];
+    let rejectMsg = "";
+    for (const file of Array.from(files)) {
+      const kind = classifyLocalFile(file);
+      if (!kind) {
+        rejectMsg = "Только фото или видео";
+        continue;
+      }
+      if (kind === "image" && file.size > CHAT_IMAGE_MAX_BYTES) {
+        rejectMsg = "Фото максимум 5 МБ";
+        continue;
+      }
+      if (kind === "video" && file.size > CHAT_VIDEO_MAX_BYTES) {
+        rejectMsg = "Видео максимум 25 МБ";
+        continue;
+      }
+      candidates.push({ file, kind });
+    }
+
+    if (!candidates.length) {
+      setError(rejectMsg || "Только фото или видео");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const room = Math.max(0, CHAT_MEDIA_MAX_FILES - pendingMedia.length);
+    if (candidates.length > room) {
+      rejectMsg = `Максимум ${CHAT_MEDIA_MAX_FILES} файлов`;
+    }
+    const take = candidates.slice(0, room).map(({ file, kind }) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+      file,
+      kind,
+      url: URL.createObjectURL(file),
+    }));
+
+    if (!take.length) {
+      setError(rejectMsg || `Максимум ${CHAT_MEDIA_MAX_FILES} файлов`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setPendingMedia((prev) => [...prev, ...take].slice(0, CHAT_MEDIA_MAX_FILES));
+    setError(rejectMsg || null);
+    setEditingId(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePending(id: string) {
+    setPendingMedia((prev) => {
+      const victim = prev.find((p) => p.id === id);
+      if (victim) URL.revokeObjectURL(victim.url);
+      return prev.filter((p) => p.id !== id);
+    });
   }
 
   function scheduleTyping() {
@@ -547,6 +661,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   async function sendBody(body: string) {
     const trimmed = body.trim();
     if (!trimmed || sending) return;
+    if (pendingMedia.length) {
+      await sendMedia(trimmed);
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -579,7 +697,35 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
       }
-      // After send (including sticker-as-reply), clear reply/edit chrome like Telegram.
+      setText("");
+      clearComposerExtras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка");
+    } finally {
+      setSending(false);
+      setStickersOpen(false);
+    }
+  }
+
+  async function sendMedia(caption = text) {
+    if (!pendingMedia.length || sending || editingId) return;
+    setSending(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      for (const item of pendingMedia) fd.append("files", item.file);
+      const cap = caption.trim();
+      if (cap) fd.set("caption", cap);
+      if (replyTo?.id) fd.set("replyToId", replyTo.id);
+      const res = await fetch("/api/messages/media", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось отправить");
+      if (json.message) {
+        stickToBottom.current = true;
+        setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
+      }
+      setText("");
+      clearPendingMedia();
       clearComposerExtras();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
@@ -591,17 +737,22 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    const body = text;
-    await sendBody(body);
+    if (pendingMedia.length) {
+      await sendMedia(text);
+      return;
+    }
+    await sendBody(text);
   }
 
   function onComposerKey(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      void sendBody(text);
+      if (pendingMedia.length) void sendMedia(text);
+      else void sendBody(text);
     }
-    if (e.key === "Escape" && (editingId || replyTo)) {
+    if (e.key === "Escape" && (editingId || replyTo || pendingMedia.length)) {
       clearComposerExtras();
+      clearPendingMedia();
     }
   }
 
@@ -649,6 +800,41 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       if (reactBurstTimer.current) clearTimeout(reactBurstTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      setPendingMedia((prev) => {
+        for (const item of prev) URL.revokeObjectURL(item.url);
+        return [];
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mediaViewer) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setMediaViewer(null);
+      if (e.key === "ArrowRight") {
+        setMediaViewer((cur) =>
+          cur
+            ? { ...cur, index: Math.min(cur.items.length - 1, cur.index + 1) }
+            : cur,
+        );
+      }
+      if (e.key === "ArrowLeft") {
+        setMediaViewer((cur) =>
+          cur ? { ...cur, index: Math.max(0, cur.index - 1) } : cur,
+        );
+      }
+    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mediaViewer]);
 
   async function toggleReaction(messageId: string, emoji: string) {
     setMenu(null);
@@ -718,7 +904,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       setPinnedPreview(null);
     } else {
       const m = messages.find((x) => x.id === id);
-      if (m) setPinnedPreview({ id: m.id, body: m.body, authorName: m.author.displayName });
+      if (m) {
+        setPinnedPreview({
+          id: m.id,
+          body: replyPreviewText(m),
+          authorName: m.author.displayName,
+        });
+      }
     }
     // Keep the thread from jumping when the compact pin strip appears/disappears.
     requestAnimationFrame(() => {
@@ -779,6 +971,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   function openEdit(m: MessageDto) {
     setMenu(null);
     setReplyTo(null);
+    clearPendingMedia();
     setEditingId(m.id);
     setText(m.body);
     textareaRef.current?.focus();
@@ -998,7 +1191,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             );
           }
           const { message: m, mine, firstInGroup, lastInGroup } = row;
-          const sticker = isStickerBody(m.body);
+          const attachments = m.attachments ?? [];
+          const sticker = isStickerBody(m.body, attachments);
+          const hasMedia = attachments.length > 0;
           return (
             <div
               key={row.key}
@@ -1032,6 +1227,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     lastInGroup ? "chat-bubble--tail" : "",
                     sticker ? "chat-bubble--sticker" : "",
                     m.replyTo ? "chat-bubble--with-quote" : "",
+                    hasMedia ? "chat-bubble--media" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -1072,10 +1268,59 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                       <span className="chat-quote__text">{m.quoteText || m.replyTo.body}</span>
                     </button>
                   ) : null}
+                  {hasMedia ? (
+                    <div
+                      className={[
+                        "chat-media",
+                        attachments.length === 1
+                          ? "chat-media--1"
+                          : attachments.length === 2
+                            ? "chat-media--2"
+                            : attachments.length === 3
+                              ? "chat-media--3"
+                              : "chat-media--many",
+                      ].join(" ")}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {attachments.map((att, idx) => (
+                        <button
+                          key={att.id}
+                          type="button"
+                          className="chat-media__item"
+                          onClick={() => setMediaViewer({ items: attachments, index: idx })}
+                          aria-label={att.kind === "video" ? "Открыть видео" : "Открыть фото"}
+                        >
+                          {att.kind === "video" ? (
+                            <>
+                              <video
+                                className="chat-media__thumb"
+                                src={att.filePath}
+                                muted
+                                playsInline
+                                preload="metadata"
+                              />
+                              <span className="chat-media__play" aria-hidden>
+                                ▶
+                              </span>
+                            </>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              className="chat-media__thumb"
+                              src={att.filePath}
+                              alt=""
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="chat-bubble__main">
-                    <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
-                      {m.body}
-                    </span>
+                    {m.body.trim() || !hasMedia ? (
+                      <span className={sticker ? "chat-bubble__sticker" : "chat-bubble__text"}>
+                        {m.body}
+                      </span>
+                    ) : null}
                     <span className="chat-bubble__meta">
                       {m.editedAt ? <span className="chat-edited">изм.</span> : null}
                       <time dateTime={m.createdAt}>
@@ -1175,22 +1420,63 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   className={[
                     "chat-bubble",
                     menu.mine ? "chat-bubble--mine" : "chat-bubble--theirs",
-                    isStickerBody(menuMessage.body) ? "chat-bubble--sticker" : "",
+                    isStickerBody(menuMessage.body, menuMessage.attachments)
+                      ? "chat-bubble--sticker"
+                      : "",
+                    menuMessage.attachments?.length ? "chat-bubble--media" : "",
                     "chat-bubble--focus",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                 >
-                  <div className="chat-bubble__main">
-                    <span
-                      className={
-                        isStickerBody(menuMessage.body)
-                          ? "chat-bubble__sticker"
-                          : "chat-bubble__text"
-                      }
+                  {menuMessage.attachments?.length ? (
+                    <div
+                      className={[
+                        "chat-media",
+                        menuMessage.attachments.length === 1
+                          ? "chat-media--1"
+                          : menuMessage.attachments.length === 2
+                            ? "chat-media--2"
+                            : menuMessage.attachments.length === 3
+                              ? "chat-media--3"
+                              : "chat-media--many",
+                      ].join(" ")}
                     >
-                      {menuMessage.body}
-                    </span>
+                      {menuMessage.attachments.map((att) => (
+                        <div key={att.id} className="chat-media__item">
+                          {att.kind === "video" ? (
+                            <>
+                              <video
+                                className="chat-media__thumb"
+                                src={att.filePath}
+                                muted
+                                playsInline
+                                preload="metadata"
+                              />
+                              <span className="chat-media__play" aria-hidden>
+                                ▶
+                              </span>
+                            </>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img className="chat-media__thumb" src={att.filePath} alt="" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="chat-bubble__main">
+                    {menuMessage.body.trim() || !menuMessage.attachments?.length ? (
+                      <span
+                        className={
+                          isStickerBody(menuMessage.body, menuMessage.attachments)
+                            ? "chat-bubble__sticker"
+                            : "chat-bubble__text"
+                        }
+                      >
+                        {menuMessage.body}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1247,7 +1533,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   <ReplyIcon />
                   <span>Ответить</span>
                 </button>
-                {menuMessage.authorId === me ? (
+                {menuMessage.authorId === me &&
+                (menuMessage.body.trim() || !(menuMessage.attachments?.length)) ? (
                   <button type="button" onClick={() => openEdit(menuMessage)}>
                     <EditIcon />
                     <span>Изменить</span>
@@ -1263,7 +1550,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 <button
                   type="button"
                   onClick={() => {
-                    void navigator.clipboard?.writeText(menuMessage.body);
+                    void navigator.clipboard?.writeText(replyPreviewText(menuMessage));
                     setMenu(null);
                   }}
                 >
@@ -1305,13 +1592,45 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         <div className="chat-composer-bar">
           <div className="chat-composer-bar__text">
             <strong>{editingId ? "Редактирование" : `Ответ · ${replyTo?.author.displayName}`}</strong>
-            <span>{editingId ? text.slice(0, 80) : replyTo?.body}</span>
+            <span>
+              {editingId ? text.slice(0, 80) : replyTo ? replyPreviewText(replyTo) : ""}
+            </span>
           </div>
-          <button type="button" className="chat-icon-btn" aria-label="Отмена" onClick={clearComposerExtras}>
+          <button
+            type="button"
+            className="chat-icon-btn"
+            aria-label="Отмена"
+            onClick={() => {
+              clearComposerExtras();
+            }}
+          >
             <CloseIcon />
           </button>
         </div>
       )}
+
+      {pendingMedia.length ? (
+        <div className="chat-attach-preview" aria-label="Вложения">
+          {pendingMedia.map((item) => (
+            <div key={item.id} className="chat-attach-preview__item">
+              {item.kind === "video" ? (
+                <video src={item.url} muted playsInline preload="metadata" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.url} alt="" />
+              )}
+              <button
+                type="button"
+                className="chat-attach-preview__remove"
+                aria-label="Убрать"
+                onClick={() => removePending(item.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {error ? <p className="chat-error">{error}</p> : null}
 
@@ -1332,6 +1651,26 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           >
             <StickerIcon />
           </button>
+          <button
+            type="button"
+            className="chat-composer__embed-btn"
+            aria-label="Фото или видео"
+            disabled={Boolean(editingId)}
+            onClick={() => {
+              setStickersOpen(false);
+              fileInputRef.current?.click();
+            }}
+          >
+            <AttachIcon />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            className="sr-only"
+            onChange={(e) => onPickMedia(e.target.files)}
+          />
           <textarea
             ref={textareaRef}
             className="chat-composer__input"
@@ -1341,7 +1680,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               if (e.target.value.trim()) scheduleTyping();
             }}
             onKeyDown={onComposerKey}
-            placeholder={editingId ? "Изменить сообщение…" : "Сообщение"}
+            placeholder={
+              editingId
+                ? "Изменить сообщение…"
+                : pendingMedia.length
+                  ? "Подпись (необязательно)"
+                  : "Сообщение"
+            }
             maxLength={4000}
             rows={1}
             enterKeyHint="send"
@@ -1351,12 +1696,103 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         <button
           type="submit"
           className="chat-send"
-          disabled={!text.trim() || sending}
+          disabled={sending || (!text.trim() && !pendingMedia.length)}
           aria-label="Отправить"
         >
           <SendIcon />
         </button>
       </form>
+
+      {portalReady && mediaViewer
+        ? createPortal(
+            <div
+              className="chat-media-viewer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Просмотр медиа"
+            >
+              <button
+                type="button"
+                className="chat-media-viewer__backdrop"
+                aria-label="Закрыть"
+                onClick={() => setMediaViewer(null)}
+              />
+              <button
+                type="button"
+                className="chat-media-viewer__close"
+                aria-label="Закрыть"
+                onClick={() => setMediaViewer(null)}
+              >
+                ×
+              </button>
+              {mediaViewer.items.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    className="chat-media-viewer__nav chat-media-viewer__nav--prev"
+                    aria-label="Назад"
+                    disabled={mediaViewer.index <= 0}
+                    onClick={() =>
+                      setMediaViewer((cur) =>
+                        cur ? { ...cur, index: Math.max(0, cur.index - 1) } : cur,
+                      )
+                    }
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-media-viewer__nav chat-media-viewer__nav--next"
+                    aria-label="Дальше"
+                    disabled={mediaViewer.index >= mediaViewer.items.length - 1}
+                    onClick={() =>
+                      setMediaViewer((cur) =>
+                        cur
+                          ? {
+                              ...cur,
+                              index: Math.min(cur.items.length - 1, cur.index + 1),
+                            }
+                          : cur,
+                      )
+                    }
+                  >
+                    ›
+                  </button>
+                </>
+              ) : null}
+              {(() => {
+                const att = mediaViewer.items[mediaViewer.index];
+                if (!att) return null;
+                if (att.kind === "video") {
+                  return (
+                    <video
+                      key={att.id}
+                      className="chat-media-viewer__media"
+                      src={att.filePath}
+                      controls
+                      playsInline
+                      autoPlay
+                    />
+                  );
+                }
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className="chat-media-viewer__media"
+                    src={att.filePath}
+                    alt=""
+                  />
+                );
+              })()}
+              {mediaViewer.items.length > 1 ? (
+                <p className="chat-media-viewer__count">
+                  {mediaViewer.index + 1} / {mediaViewer.items.length}
+                </p>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
 
       {profileOpen ? (
         <div className="chat-profile-overlay" role="dialog" aria-modal="true" aria-label="Ваш профиль">

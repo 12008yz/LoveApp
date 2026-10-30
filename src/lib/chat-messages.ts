@@ -21,7 +21,20 @@ export const reactionSchema = z.object({
   emoji: z.enum(CHAT_REACTIONS as unknown as [string, ...string[]]),
 });
 
+export const CHAT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const CHAT_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
+export const CHAT_MEDIA_MAX_FILES = 10;
+
 export type AggregatedReaction = { emoji: string; count: number; me: boolean };
+
+export type AttachmentDto = {
+  id: string;
+  kind: "image" | "video";
+  filePath: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+};
 
 /** Group reaction rows by emoji (first-seen order), flagging the viewer's own. */
 export function aggregateReactions(
@@ -47,9 +60,17 @@ export const MESSAGE_INCLUDE = {
       body: true,
       authorId: true,
       author: { select: { id: true, displayName: true } },
+      attachments: {
+        select: { kind: true },
+        orderBy: { sortOrder: "asc" as const },
+        take: 10,
+      },
     },
   },
   reactions: { select: { emoji: true, userId: true } },
+  attachments: {
+    orderBy: { sortOrder: "asc" as const },
+  },
 } as const;
 
 export type MessageDto = {
@@ -70,6 +91,7 @@ export type MessageDto = {
     author: { displayName: string };
   } | null;
   reactions: AggregatedReaction[];
+  attachments: AttachmentDto[];
 };
 
 type DateLike = Date | string | null | undefined;
@@ -91,8 +113,19 @@ export type MessageWithRelations = {
     body: string;
     authorId: string;
     author?: { id: string; displayName: string } | null;
+    attachments?: { kind: string }[] | null;
   } | null;
   reactions?: { emoji: string; userId: string }[] | null;
+  attachments?:
+    | {
+        id: string;
+        kind: string;
+        filePath: string;
+        mimeType: string;
+        sizeBytes: number;
+        sortOrder: number;
+      }[]
+    | null;
 };
 
 function iso(value: DateLike): string | null {
@@ -106,7 +139,51 @@ export function truncateReplyPreview(body: string, max = 120): string {
   return `${body.slice(0, max - 1)}…`;
 }
 
+export function mediaPreviewLabel(
+  attachments: { kind: string }[] | null | undefined,
+): string {
+  const list = attachments ?? [];
+  if (list.length === 0) return "";
+  if (list.length > 1) return `Альбом · ${list.length}`;
+  return list[0].kind === "video" ? "Видео" : "Фото";
+}
+
+export function pushPreviewForMessage(
+  body: string,
+  attachments: { kind: string }[] | null | undefined,
+): string {
+  const trimmed = body.trim();
+  if (trimmed) {
+    return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
+  }
+  return mediaPreviewLabel(attachments) || "Сообщение";
+}
+
+function toAttachmentDto(
+  row: {
+    id: string;
+    kind: string;
+    filePath: string;
+    mimeType: string;
+    sizeBytes: number;
+    sortOrder: number;
+  },
+): AttachmentDto {
+  return {
+    id: row.id,
+    kind: row.kind === "video" ? "video" : "image",
+    filePath: row.filePath,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    sortOrder: row.sortOrder,
+  };
+}
+
 export function toMessageDto(message: MessageWithRelations, me: string): MessageDto {
+  const replyBody = message.replyTo
+    ? message.replyTo.body.trim() || mediaPreviewLabel(message.replyTo.attachments)
+    : "";
+
   return {
     id: message.id,
     coupleId: message.coupleId,
@@ -125,11 +202,12 @@ export function toMessageDto(message: MessageWithRelations, me: string): Message
     replyTo: message.replyTo
       ? {
           id: message.replyTo.id,
-          body: truncateReplyPreview(message.replyTo.body),
+          body: truncateReplyPreview(replyBody || "Сообщение"),
           authorId: message.replyTo.authorId,
           author: { displayName: message.replyTo.author?.displayName ?? "" },
         }
       : null,
     reactions: aggregateReactions(message.reactions ?? [], me),
+    attachments: (message.attachments ?? []).map(toAttachmentDto),
   };
 }
