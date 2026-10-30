@@ -1155,42 +1155,43 @@ select {
   inset: 0;
   border: none;
   padding: 0;
-  background: rgba(42, 24, 25, 0.42);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  /* Solid scrim only — backdrop-filter + opacity was janking the open. */
+  background: rgba(42, 24, 25, 0.44);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 280ms var(--ease);
+  transition: opacity 200ms var(--ease);
 }
 
 .chat-focus.is-open .chat-focus__backdrop {
   opacity: 1;
+  will-change: opacity;
 }
 
 .chat-focus__bubble {
   position: fixed;
   z-index: 2;
   pointer-events: none;
-  filter: drop-shadow(0 10px 28px rgba(42, 24, 25, 0.22));
   opacity: 0;
-  transform: scale(0.96);
+  transform: scale(0.98);
   transition:
-    opacity 240ms var(--ease),
-    transform 260ms var(--ease);
+    opacity 200ms var(--ease),
+    transform 220ms var(--ease);
 }
 
 .chat-focus.is-open .chat-focus__bubble {
   opacity: 1;
   transform: none;
+  will-change: opacity, transform;
 }
 
 .chat-focus__bubble .chat-bubble {
   max-width: 100%;
+  box-shadow: 0 10px 28px rgba(42, 24, 25, 0.22);
 }
 
 .chat-bubble--focus {
-  transform: scale(1.02);
-  transition: transform 260ms var(--ease);
+  transform: scale(1.015);
+  transition: transform 220ms var(--ease);
 }
 
 .chat-focus__reactions {
@@ -1205,15 +1206,16 @@ select {
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   box-shadow: var(--shadow);
   opacity: 0;
-  transform: scale(0.96);
+  transform: scale(0.98) translateY(4px);
   transition:
-    opacity 240ms var(--ease),
-    transform 260ms var(--ease);
+    opacity 200ms var(--ease),
+    transform 220ms var(--ease);
 }
 
 .chat-focus.is-open .chat-focus__reactions {
   opacity: 1;
   transform: none;
+  will-change: opacity, transform;
 }
 
 .chat-focus__reactions button {
@@ -1230,11 +1232,10 @@ select {
   transform: scale(1);
 }
 
-/* Start emoji motion only after overlay opens (avoids animating while faded out). */
+/* Soft pop on open only — idle wiggle skipped (was fighting the enter transition). */
 .chat-focus.is-open .chat-focus__reactions button {
-  animation:
-    chat-focus-emoji-in 220ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 20ms) both,
-    chat-focus-emoji-idle 1.8s ease-in-out calc(0.28s + var(--i, 0) * 90ms) infinite;
+  animation: chat-focus-emoji-in 200ms cubic-bezier(0.22, 1, 0.36, 1)
+    calc(var(--i, 0) * 16ms) both;
 }
 
 .chat-focus__reactions button:hover,
@@ -1262,16 +1263,6 @@ select {
   }
 }
 
-@keyframes chat-focus-emoji-idle {
-  0%,
-  100% {
-    transform: translateY(0) scale(1) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-2px) scale(1.06) rotate(var(--wiggle, 0deg));
-  }
-}
-
 @keyframes chat-focus-emoji-bounce {
   0% {
     transform: scale(1);
@@ -1296,15 +1287,16 @@ select {
   box-shadow: var(--shadow);
   overflow: hidden;
   opacity: 0;
-  transform: scale(0.96);
+  transform: scale(0.98) translateY(4px);
   transition:
-    opacity 240ms var(--ease),
-    transform 260ms var(--ease);
+    opacity 200ms var(--ease),
+    transform 220ms var(--ease);
 }
 
 .chat-focus.is-open .chat-focus__menu {
   opacity: 1;
   transform: none;
+  will-change: opacity, transform;
 }
 
 .chat-focus__menu > button {

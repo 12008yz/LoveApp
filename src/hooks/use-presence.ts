@@ -3,9 +3,14 @@
 import { useEffect, useState } from "react";
 
 /** Keep overlay mounted through exit transition. `visible` drives `.is-open`. */
-export function usePresence(open: boolean, durationMs = 320) {
+export function usePresence(open: boolean, durationMs = 340) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
+
+  // Mount on the same render as open so the portal isn't delayed a full effect tick.
+  if (open && !mounted) {
+    setMounted(true);
+  }
 
   useEffect(() => {
     const reduce =
@@ -14,15 +19,13 @@ export function usePresence(open: boolean, durationMs = 320) {
     const ms = reduce ? 0 : durationMs;
 
     if (open) {
-      setMounted(true);
-      let raf2 = 0;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => setVisible(true));
-      });
-      return () => {
-        cancelAnimationFrame(raf1);
-        cancelAnimationFrame(raf2);
-      };
+      if (reduce) {
+        setVisible(true);
+        return;
+      }
+      // One frame at opacity 0, then open — enough for CSS transition, less hitch than double rAF.
+      const raf = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(raf);
     }
 
     setVisible(false);

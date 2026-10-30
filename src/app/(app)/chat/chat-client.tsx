@@ -393,7 +393,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const stickersPresence = usePresence(stickersOpen, 380);
   const profilePresence = usePresence(profileOpen);
   const mediaPresence = usePresence(Boolean(mediaViewer));
-  const menuPresence = usePresence(Boolean(menu), 300);
+  const menuPresence = usePresence(Boolean(menu), 240);
 
   useEffect(() => {
     if (mediaViewer) setMediaViewerShown(mediaViewer);
@@ -1069,8 +1069,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       /* ignore */
     }
     const snap = messages.find((m) => m.id === messageId) ?? null;
+    const next = buildMenuState(messageId, mine);
     setMenuMessageShown(snap);
-    setMenu(buildMenuState(messageId, mine));
+    setMenuShown(next);
+    setMenu(next);
   }
 
   function openReply(m: MessageDto) {
@@ -1611,12 +1613,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   <button
                     key={emoji}
                     type="button"
-                    style={
-                      {
-                        ["--i" as string]: i,
-                        ["--wiggle" as string]: `${i % 2 === 0 ? -6 : 6}deg`,
-                      } as CSSProperties
-                    }
+                    style={{ ["--i" as string]: i } as CSSProperties}
                     onPointerDown={(e) =>
                       onReactionPress(e, menuMessage.id, emoji, "pointer")
                     }
