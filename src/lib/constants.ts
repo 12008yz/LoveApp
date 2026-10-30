@@ -36,7 +36,48 @@ export const CHAT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"]
 export type ChatReaction = (typeof CHAT_REACTIONS)[number];
 
 /** Quick sticker pack for chat (sent as plain message body). */
-export const CHAT_STICKERS = ["❤️", "🥰", "😘", "🤗", "✨", "🌙", "☕", "🌸", "🐻", "💌"] as const;
+export const CHAT_STICKERS = [
+  "❤️",
+  "🥰",
+  "😘",
+  "💋",
+  "🤗",
+  "💘",
+  "💞",
+  "💗",
+  "💕",
+  "✨",
+  "🌟",
+  "🌙",
+  "⭐",
+  "☕",
+  "🍵",
+  "🍰",
+  "🍓",
+  "🍫",
+  "🌸",
+  "🌻",
+  "🌹",
+  "🐻",
+  "🐰",
+  "🐱",
+  "🐶",
+  "🦋",
+  "💌",
+  "🎀",
+  "🥹",
+  "😊",
+  "😌",
+  "😴",
+  "🥺",
+  "😂",
+  "🔥",
+  "👍",
+  "👋",
+  "💪",
+  "🏠",
+  "🎵",
+] as const;
 
 export const GAME_HUB = [
   {

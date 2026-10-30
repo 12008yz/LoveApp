@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 import { canEditLetter, isActionableUnread } from "@/lib/letters";
+import { usePresence } from "@/hooks/use-presence";
 
 type Letter = {
   id: string;
@@ -48,11 +49,17 @@ export function LettersClient() {
   const [letters, setLetters] = useState<Letter[]>([]);
   const [tab, setTab] = useState<Tab>("inbox");
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [overlayShown, setOverlayShown] = useState<Overlay | null>(null);
   const [phase, setPhase] = useState<EnvelopePhase>("idle");
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [ready, setReady] = useState(false);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayPresence = usePresence(Boolean(overlay));
+
+  useEffect(() => {
+    if (overlay) setOverlayShown(overlay);
+  }, [overlay]);
 
   async function load() {
     try {
@@ -95,9 +102,10 @@ export function LettersClient() {
     [letters, me],
   );
 
+  const displayOverlay = overlay ?? (overlayPresence.mounted ? overlayShown : null);
   const activeLetter =
-    overlay && (overlay.kind === "view" || overlay.kind === "edit")
-      ? letters.find((l) => l.id === overlay.id) ?? null
+    displayOverlay && (displayOverlay.kind === "view" || displayOverlay.kind === "edit")
+      ? letters.find((l) => l.id === displayOverlay.id) ?? null
       : null;
 
   function clearOpenTimer() {
@@ -297,9 +305,14 @@ export function LettersClient() {
           : null}
       </div>
 
-      {mounted && overlay
+      {mounted && overlayPresence.mounted && displayOverlay
         ? createPortal(
-            <div className="letter-overlay" role="dialog" aria-modal="true" aria-label="Письмо">
+            <div
+              className={overlayPresence.visible ? "letter-overlay is-open" : "letter-overlay"}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Письмо"
+            >
               <button
                 type="button"
                 className="letter-overlay__backdrop"
@@ -310,7 +323,7 @@ export function LettersClient() {
               <div className={`letter-overlay__stage is-${phase}`}>
                 <div
                   className="letter-env"
-                  aria-hidden={phase === "open" && overlay.kind !== "view"}
+                  aria-hidden={phase === "open" && displayOverlay.kind !== "view"}
                 >
                   <div className="letter-env__back" />
                   <div className="letter-env__paper" />
@@ -318,10 +331,10 @@ export function LettersClient() {
                   <div className="letter-env__flap" />
                 </div>
 
-                {overlay.kind === "compose" || overlay.kind === "edit" ? (
+                {displayOverlay.kind === "compose" || displayOverlay.kind === "edit" ? (
                   <form
                     className="letter-sheet"
-                    onSubmit={overlay.kind === "compose" ? onCompose : onEdit}
+                    onSubmit={displayOverlay.kind === "compose" ? onCompose : onEdit}
                   >
                     <div className="field">
                       <label htmlFor="letter-title">Заголовок</label>
@@ -330,7 +343,9 @@ export function LettersClient() {
                         name="title"
                         required
                         maxLength={120}
-                        defaultValue={overlay.kind === "edit" ? activeLetter?.title : undefined}
+                        defaultValue={
+                          displayOverlay.kind === "edit" ? activeLetter?.title : undefined
+                        }
                       />
                     </div>
                     <div className="field">
@@ -341,7 +356,9 @@ export function LettersClient() {
                         required
                         rows={5}
                         maxLength={10000}
-                        defaultValue={overlay.kind === "edit" ? activeLetter?.body : undefined}
+                        defaultValue={
+                          displayOverlay.kind === "edit" ? activeLetter?.body : undefined
+                        }
                       />
                     </div>
                     <div className="field">
@@ -352,7 +369,7 @@ export function LettersClient() {
                         type="datetime-local"
                         required
                         defaultValue={
-                          overlay.kind === "edit" && activeLetter
+                          displayOverlay.kind === "edit" && activeLetter
                             ? toLocalInput(activeLetter.unlockAt)
                             : undefined
                         }
@@ -368,13 +385,13 @@ export function LettersClient() {
                         Отмена
                       </button>
                       <button type="submit" className="btn btn-primary" disabled={busy}>
-                        {overlay.kind === "compose" ? "Запечатать" : "Сохранить"}
+                        {displayOverlay.kind === "compose" ? "Запечатать" : "Сохранить"}
                       </button>
                     </div>
                   </form>
                 ) : null}
 
-                {overlay.kind === "view" && activeLetter ? (
+                {displayOverlay.kind === "view" && activeLetter ? (
                   <div className="letter-sheet">
                     {!activeLetter.canRead ? (
                       <>

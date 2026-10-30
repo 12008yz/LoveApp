@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { UserAvatar } from "@/components/user-avatar";
+import { usePresence } from "@/hooks/use-presence";
 
 type Person = {
   id: string;
@@ -117,6 +118,7 @@ export function MiniProfile({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showPasswords, setShowPasswords] = useState(false);
   const [editing, setEditing] = useState(false);
+  const presence = usePresence(open && portalReady);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/mini-profile");
@@ -165,7 +167,7 @@ export function MiniProfile({
     };
   }, [avatarPreview]);
 
-  if (!open || !portalReady) return null;
+  if (!presence.mounted) return null;
 
   const me = data?.me;
   const partner = data?.partner;
@@ -221,7 +223,12 @@ export function MiniProfile({
   }
 
   return createPortal(
-    <div className="mini-profile" role="dialog" aria-modal="true" aria-label="Личный профиль">
+    <div
+      className={presence.visible ? "mini-profile is-open" : "mini-profile"}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Личный профиль"
+    >
       <button type="button" className="mini-profile__backdrop" aria-label="Закрыть" onClick={onClose} />
       <div className="mini-profile__sheet">
         <div className="mini-profile__top">

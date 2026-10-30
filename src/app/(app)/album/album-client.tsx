@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 import { MiniProfile } from "@/components/mini-profile";
 import { UserAvatar } from "@/components/user-avatar";
+import { usePresence } from "@/hooks/use-presence";
 
 type Author = { id: string; displayName: string; avatarPath?: string | null };
 
@@ -45,9 +46,15 @@ export function AlbumClient({ meId }: { meId: string }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyComment, setBusyComment] = useState<string | null>(null);
   const [viewer, setViewer] = useState<Item | null>(null);
+  const [viewerShown, setViewerShown] = useState<Item | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [miniOpen, setMiniOpen] = useState(false);
   const [miniFocus, setMiniFocus] = useState<string | null>(null);
+  const viewerPresence = usePresence(Boolean(viewer));
+
+  useEffect(() => {
+    if (viewer) setViewerShown(viewer);
+  }, [viewer]);
 
   function openMini(userId: string) {
     setMiniFocus(userId);
@@ -189,6 +196,8 @@ export function AlbumClient({ meId }: { meId: string }) {
       ),
     );
   }
+
+  const albumShown = viewer ?? (viewerPresence.mounted ? viewerShown : null);
 
   return (
     <div className="album">
@@ -380,10 +389,10 @@ export function AlbumClient({ meId }: { meId: string }) {
           : null}
       </div>
 
-      {portalReady && viewer
+      {portalReady && albumShown
         ? createPortal(
             <div
-              className="album-viewer"
+              className={viewerPresence.visible ? "album-viewer is-open" : "album-viewer"}
               role="dialog"
               aria-modal="true"
               aria-label="Просмотр фото"
@@ -397,8 +406,8 @@ export function AlbumClient({ meId }: { meId: string }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 className="album-viewer__img"
-                src={viewer.filePath}
-                alt={viewer.caption || "Фото"}
+                src={albumShown.filePath}
+                alt={albumShown.caption || "Фото"}
               />
               <button
                 type="button"
@@ -408,8 +417,8 @@ export function AlbumClient({ meId }: { meId: string }) {
               >
                 ×
               </button>
-              {viewer.caption ? (
-                <p className="album-viewer__caption">{viewer.caption}</p>
+              {albumShown.caption ? (
+                <p className="album-viewer__caption">{albumShown.caption}</p>
               ) : null}
             </div>,
             document.body,

@@ -26,6 +26,7 @@ import {
 } from "@/lib/chat-messages";
 import { MiniProfile } from "@/components/mini-profile";
 import { UserAvatar } from "@/components/user-avatar";
+import { usePresence } from "@/hooks/use-presence";
 
 type PendingMedia = {
   id: string;
@@ -347,9 +348,17 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [tick, setTick] = useState(0);
   const [pendingMedia, setPendingMedia] = useState<PendingMedia[]>([]);
   const [mediaViewer, setMediaViewer] = useState<MediaViewerState | null>(null);
+  const [mediaViewerShown, setMediaViewerShown] = useState<MediaViewerState | null>(null);
   const [miniProfileOpen, setMiniProfileOpen] = useState(false);
   const [miniFocusId, setMiniFocusId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const stickersPresence = usePresence(stickersOpen);
+  const profilePresence = usePresence(profileOpen);
+  const mediaPresence = usePresence(Boolean(mediaViewer));
+
+  useEffect(() => {
+    if (mediaViewer) setMediaViewerShown(mediaViewer);
+  }, [mediaViewer]);
 
   const logRef = useRef<HTMLDivElement>(null);
   const reactBurstId = useRef(0);
@@ -563,10 +572,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (!chatRevealed) return;
     const el = logRef.current;
     if (!el || messages.length === 0) return;
-    if (stickToBottom.current || stickersOpen) {
+    if (stickToBottom.current || stickersPresence.mounted) {
       requestAnimationFrame(scrollLogToBottom);
     }
-  }, [chatRevealed, messages.length, stickersOpen]);
+  }, [chatRevealed, messages.length, stickersPresence.mounted]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -966,6 +975,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     };
   }, [menu]);
 
+  useEffect(() => {
+    if (!stickersOpen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setStickersOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stickersOpen]);
+
   function openMessageMenu(messageId: string, mine: boolean) {
     lastTap.current = null;
     window.getSelection()?.removeAllRanges();
@@ -1065,9 +1083,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   }
 
   const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
+  const mediaShown = mediaViewer ?? (mediaPresence.mounted ? mediaViewerShown : null);
 
   return (
-    <div className="chat-page">
+    <div className={stickersPresence.mounted ? "chat-page is-stickers-open" : "chat-page"}>
       {partnerView ? (
         <header className="chat-header">
           <UserAvatar
@@ -1577,19 +1596,50 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           )
         : null}
 
-      {stickersOpen ? (
-        <div className="chat-stickers" aria-label="Стикеры">
-          {CHAT_STICKERS.map((sticker) => (
-            <button
-              key={sticker}
-              type="button"
-              className="chat-stickers__btn"
-              onClick={() => void sendBody(sticker)}
-            >
-              {sticker}
-            </button>
-          ))}
-        </div>
+      {stickersPresence.mounted ? (
+        <>
+          <button
+            type="button"
+            className={
+              stickersPresence.visible
+                ? "chat-stickers__scrim is-open"
+                : "chat-stickers__scrim"
+            }
+            aria-label="Закрыть стикеры"
+            onClick={() => setStickersOpen(false)}
+          />
+          <div
+            className={stickersPresence.visible ? "chat-stickers is-open" : "chat-stickers"}
+            role="dialog"
+            aria-label="Стикеры"
+            aria-modal="true"
+          >
+            <div className="chat-stickers__handle" aria-hidden />
+            <div className="chat-stickers__top">
+              <h3 className="chat-stickers__title">Стикеры</h3>
+              <button
+                type="button"
+                className="chat-icon-btn"
+                aria-label="Закрыть"
+                onClick={() => setStickersOpen(false)}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="chat-stickers__grid">
+              {CHAT_STICKERS.map((sticker) => (
+                <button
+                  key={sticker}
+                  type="button"
+                  className="chat-stickers__btn"
+                  onClick={() => void sendBody(sticker)}
+                >
+                  {sticker}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       ) : null}
 
       {(replyTo || editingId) && (
@@ -1707,10 +1757,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         </button>
       </form>
 
-      {portalReady && mediaViewer
+      {portalReady && mediaShown
         ? createPortal(
             <div
-              className="chat-media-viewer"
+              className={
+                mediaPresence.visible ? "chat-media-viewer is-open" : "chat-media-viewer"
+              }
               role="dialog"
               aria-modal="true"
               aria-label="Просмотр медиа"
@@ -1729,13 +1781,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               >
                 ×
               </button>
-              {mediaViewer.items.length > 1 ? (
+              {mediaShown.items.length > 1 ? (
                 <>
                   <button
                     type="button"
                     className="chat-media-viewer__nav chat-media-viewer__nav--prev"
                     aria-label="Назад"
-                    disabled={mediaViewer.index <= 0}
+                    disabled={mediaShown.index <= 0}
                     onClick={() =>
                       setMediaViewer((cur) =>
                         cur ? { ...cur, index: Math.max(0, cur.index - 1) } : cur,
@@ -1748,7 +1800,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     type="button"
                     className="chat-media-viewer__nav chat-media-viewer__nav--next"
                     aria-label="Дальше"
-                    disabled={mediaViewer.index >= mediaViewer.items.length - 1}
+                    disabled={mediaShown.index >= mediaShown.items.length - 1}
                     onClick={() =>
                       setMediaViewer((cur) =>
                         cur
@@ -1765,7 +1817,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 </>
               ) : null}
               {(() => {
-                const att = mediaViewer.items[mediaViewer.index];
+                const att = mediaShown.items[mediaShown.index];
                 if (!att) return null;
                 if (att.kind === "video") {
                   return (
@@ -1788,9 +1840,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                   />
                 );
               })()}
-              {mediaViewer.items.length > 1 ? (
+              {mediaShown.items.length > 1 ? (
                 <p className="chat-media-viewer__count">
-                  {mediaViewer.index + 1} / {mediaViewer.items.length}
+                  {mediaShown.index + 1} / {mediaShown.items.length}
                 </p>
               ) : null}
             </div>,
@@ -1798,8 +1850,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           )
         : null}
 
-      {profileOpen ? (
-        <div className="chat-profile-overlay" role="dialog" aria-modal="true" aria-label="Ваш профиль">
+      {profilePresence.mounted ? (
+        <div
+          className={
+            profilePresence.visible ? "chat-profile-overlay is-open" : "chat-profile-overlay"
+          }
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ваш профиль"
+        >
           <button
             type="button"
             className="chat-profile-overlay__backdrop"

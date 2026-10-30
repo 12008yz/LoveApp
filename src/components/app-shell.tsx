@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MORE_NAV, PRIMARY_NAV } from "@/lib/constants";
 import { NavIcon } from "@/components/nav-icons";
+import { usePresence } from "@/hooks/use-presence";
 
 export function AppShell({
   children,
@@ -16,6 +17,7 @@ export function AppShell({
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [letterUnread, setLetterUnread] = useState(0);
+  const morePresence = usePresence(moreOpen);
 
   const moreActive = MORE_NAV.some(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -93,8 +95,13 @@ export function AppShell({
         </button>
       </nav>
 
-      {moreOpen ? (
-        <div className="more-sheet" role="dialog" aria-modal="true" aria-label="Ещё">
+      {morePresence.mounted ? (
+        <div
+          className={morePresence.visible ? "more-sheet is-open" : "more-sheet"}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ещё"
+        >
           <button
             type="button"
             className="more-sheet__backdrop"
