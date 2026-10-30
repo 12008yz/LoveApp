@@ -122,28 +122,27 @@ const EMOJI_VIBES = emojiItems([
   "🫣",
 ]);
 
+const CUTE_IMAGES = imageItems([
+  "cute/heart-glow",
+  "cute/bear-hug",
+  "cute/coffee-date",
+  "cute/moon-kiss",
+  "cute/love-letter",
+  "cute/cozy-home",
+  "cute/spark-love",
+  "cute/cat-blush",
+  "cute/bouquet",
+  "cute/sleepy",
+  "cute/high-five",
+  "cute/ring",
+]);
+
+/** Single pack: vibes first, then love emoji, then cute images. */
+export const STICKER_ITEMS: StickerItem[] = [...EMOJI_VIBES, ...EMOJI_LOVE, ...CUTE_IMAGES];
+
 export const STICKER_PACKS: StickerPack[] = [
-  { id: "emoji", label: "Эмодзи", items: EMOJI_LOVE },
-  {
-    id: "cute",
-    label: "Милые",
-    items: imageItems([
-      "cute/heart-glow",
-      "cute/bear-hug",
-      "cute/coffee-date",
-      "cute/moon-kiss",
-      "cute/love-letter",
-      "cute/cozy-home",
-      "cute/spark-love",
-      "cute/cat-blush",
-      "cute/bouquet",
-      "cute/sleepy",
-      "cute/high-five",
-      "cute/ring",
-    ]),
-  },
-  { id: "vibes", label: "Вайб", items: EMOJI_VIBES },
+  { id: "all", label: "Стикеры", items: STICKER_ITEMS },
 ];
 
-/** @deprecated use STICKER_PACKS — kept for any stray imports */
-export const CHAT_STICKERS = EMOJI_LOVE.map((i) => i.value);
+/** @deprecated use STICKER_ITEMS */
+export const CHAT_STICKERS = EMOJI_VIBES.map((i) => i.value);

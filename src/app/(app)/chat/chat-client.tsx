@@ -20,9 +20,14 @@ import {
   parseStickerToken,
   stickerImageById,
   stickerPreviewLabel,
-  STICKER_PACKS,
+  STICKER_ITEMS,
   type StickerItem,
 } from "@/lib/stickers";
+import {
+  readStickerUsage,
+  recordStickerUsageFromBody,
+  sortStickersByUsage,
+} from "@/lib/sticker-usage";
 import { formatLastSeen, isOnline } from "@/lib/chat-presence";
 import {
   CHAT_IMAGE_MAX_BYTES,
@@ -349,7 +354,11 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
-  const [stickerPackId, setStickerPackId] = useState(STICKER_PACKS[0]?.id ?? "emoji");
+  const [stickerUsage, setStickerUsage] = useState(() => readStickerUsage());
+  const sortedStickers = useMemo(
+    () => sortStickersByUsage(STICKER_ITEMS, stickerUsage),
+    [stickerUsage],
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchHits, setSearchHits] = useState<MessageDto[]>([]);
@@ -378,7 +387,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [miniProfileOpen, setMiniProfileOpen] = useState(false);
   const [miniFocusId, setMiniFocusId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const stickersPresence = usePresence(stickersOpen);
+  const stickersPresence = usePresence(stickersOpen, 380);
   const profilePresence = usePresence(profileOpen);
   const mediaPresence = usePresence(Boolean(mediaViewer));
 
@@ -406,6 +415,26 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }
+
+  // Keep log pinned while sticker sheet height animates open/closed.
+  useEffect(() => {
+    if (!stickersPresence.mounted) return;
+    stickToBottom.current = true;
+    let cancelled = false;
+    let raf = 0;
+    const started = performance.now();
+    const follow = (now: number) => {
+      if (cancelled) return;
+      scrollLogToBottom();
+      if (now - started < 420) raf = requestAnimationFrame(follow);
+    };
+    raf = requestAnimationFrame(follow);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      requestAnimationFrame(scrollLogToBottom);
+    };
+  }, [stickersPresence.mounted, stickersPresence.visible]);
 
   const me = data?.user?.id || profile?.id;
   function openMiniProfile(userId?: string | null) {
@@ -748,6 +777,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       if (json.message) {
         stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
+      }
+      if (recordStickerUsageFromBody(trimmed)) {
+        setStickerUsage(readStickerUsage());
       }
       setText("");
       clearComposerExtras();
@@ -1656,48 +1688,29 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 <CloseIcon />
               </button>
             </div>
-            <div className="chat-stickers__tabs" role="tablist" aria-label="Наборы">
-              {STICKER_PACKS.map((pack) => (
-                <button
-                  key={pack.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={stickerPackId === pack.id}
-                  className={
-                    stickerPackId === pack.id
-                      ? "chat-stickers__tab is-active"
-                      : "chat-stickers__tab"
-                  }
-                  onClick={() => setStickerPackId(pack.id)}
-                >
-                  {pack.label}
-                </button>
-              ))}
-            </div>
             <div className="chat-stickers__grid">
-              {(STICKER_PACKS.find((p) => p.id === stickerPackId) ?? STICKER_PACKS[0]).items.map(
-                (item: StickerItem) =>
-                  item.type === "emoji" ? (
-                    <button
-                      key={`e-${item.value}`}
-                      type="button"
-                      className="chat-stickers__btn"
-                      onClick={() => void sendBody(item.value)}
-                    >
-                      {item.value}
-                    </button>
-                  ) : (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="chat-stickers__btn chat-stickers__btn--image"
-                      aria-label={item.label}
-                      onClick={() => void sendBody(encodeStickerToken(item.id))}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.src} alt="" draggable={false} />
-                    </button>
-                  ),
+              {sortedStickers.map((item: StickerItem) =>
+                item.type === "emoji" ? (
+                  <button
+                    key={`e-${item.value}`}
+                    type="button"
+                    className="chat-stickers__btn"
+                    onClick={() => void sendBody(item.value)}
+                  >
+                    {item.value}
+                  </button>
+                ) : (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="chat-stickers__btn chat-stickers__btn--image"
+                    aria-label={item.label}
+                    onClick={() => void sendBody(encodeStickerToken(item.id))}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.src} alt="" draggable={false} />
+                  </button>
+                ),
               )}
             </div>
           </div>

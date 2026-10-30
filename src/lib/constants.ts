@@ -35,8 +35,8 @@ export const MORE_NAV = [
 export const CHAT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👍"] as const;
 export type ChatReaction = (typeof CHAT_REACTIONS)[number];
 
-/** @deprecated Prefer STICKER_PACKS from @/lib/stickers */
-export { CHAT_STICKERS, STICKER_PACKS } from "@/lib/stickers";
+/** @deprecated Prefer STICKER_ITEMS from @/lib/stickers */
+export { CHAT_STICKERS, STICKER_ITEMS, STICKER_PACKS } from "@/lib/stickers";
 
 export const GAME_HUB = [
   {

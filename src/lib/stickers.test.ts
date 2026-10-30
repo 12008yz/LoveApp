@@ -6,6 +6,7 @@ import {
   parseStickerToken,
   stickerImageById,
   stickerPreviewLabel,
+  STICKER_ITEMS,
   STICKER_PACKS,
 } from "@/lib/stickers";
 
@@ -28,7 +29,8 @@ describe("stickers", () => {
   it("resolves image metadata and packs", () => {
     expect(stickerImageById("cute/heart-glow")?.src).toContain("/stickers/cute/");
     expect(stickerPreviewLabel(encodeStickerToken("cute/heart-glow"))).toBe("Сердце");
-    expect(STICKER_PACKS.length).toBe(3);
-    expect(STICKER_PACKS.every((p) => p.items.length > 0)).toBe(true);
+    expect(STICKER_PACKS.length).toBe(1);
+    expect(STICKER_ITEMS.length).toBeGreaterThan(20);
+    expect(STICKER_ITEMS[0]).toMatchObject({ type: "emoji", value: "😂" });
   });
 });
