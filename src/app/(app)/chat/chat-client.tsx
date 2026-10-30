@@ -354,7 +354,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [stickersOpen, setStickersOpen] = useState(false);
-  const [stickerUsage, setStickerUsage] = useState(() => readStickerUsage());
+  // Empty on SSR/first paint — hydrate from localStorage after mount (avoids mismatch).
+  const [stickerUsage, setStickerUsage] = useState<Record<string, number>>({});
   const sortedStickers = useMemo(
     () => sortStickersByUsage(STICKER_ITEMS, stickerUsage),
     [stickerUsage],
@@ -369,6 +370,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [menuShown, setMenuShown] = useState<MenuState>(null);
+  const [menuMessageShown, setMenuMessageShown] = useState<MessageDto | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [partnerSeen, setPartnerSeen] = useState<string | null>(partner?.lastSeenAt ?? null);
   const [partnerLive, setPartnerLive] = useState<{
@@ -390,12 +393,28 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const stickersPresence = usePresence(stickersOpen, 380);
   const profilePresence = usePresence(profileOpen);
   const mediaPresence = usePresence(Boolean(mediaViewer));
+  const menuPresence = usePresence(Boolean(menu), 300);
 
   useEffect(() => {
     if (mediaViewer) setMediaViewerShown(mediaViewer);
   }, [mediaViewer]);
 
+  useEffect(() => {
+    if (menu) setMenuShown(menu);
+  }, [menu]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const live = messages.find((m) => m.id === menu.messageId);
+    if (live) setMenuMessageShown(live);
+  }, [menu, messages]);
+
+  useEffect(() => {
+    setStickerUsage(readStickerUsage());
+  }, []);
+
   const logRef = useRef<HTMLDivElement>(null);
+  const stickersSlotRef = useRef<HTMLDivElement>(null);
   const reactBurstId = useRef(0);
   const reactBurstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -416,25 +435,24 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     el.scrollTop = el.scrollHeight;
   }
 
-  // Keep log pinned while sticker sheet height animates open/closed.
+  // Pin log to bottom as sticker slot height changes (smooth grid collapse).
   useEffect(() => {
     if (!stickersPresence.mounted) return;
+    const slot = stickersSlotRef.current;
+    const log = logRef.current;
+    if (!slot || !log) return;
     stickToBottom.current = true;
-    let cancelled = false;
-    let raf = 0;
-    const started = performance.now();
-    const follow = (now: number) => {
-      if (cancelled) return;
-      scrollLogToBottom();
-      if (now - started < 420) raf = requestAnimationFrame(follow);
+    const pin = () => {
+      if (stickToBottom.current) log.scrollTop = log.scrollHeight;
     };
-    raf = requestAnimationFrame(follow);
+    pin();
+    const ro = new ResizeObserver(pin);
+    ro.observe(slot);
     return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-      requestAnimationFrame(scrollLogToBottom);
+      ro.disconnect();
+      requestAnimationFrame(pin);
     };
-  }, [stickersPresence.mounted, stickersPresence.visible]);
+  }, [stickersPresence.mounted]);
 
   const me = data?.user?.id || profile?.id;
   function openMiniProfile(userId?: string | null) {
@@ -1019,7 +1037,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   }, []);
 
   useEffect(() => {
-    if (!menu) return;
+    if (!menuPresence.mounted) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.getSelection()?.removeAllRanges();
@@ -1031,7 +1049,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [menu]);
+  }, [menuPresence.mounted]);
 
   useEffect(() => {
     if (!stickersOpen) return;
@@ -1050,6 +1068,8 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     } catch {
       /* ignore */
     }
+    const snap = messages.find((m) => m.id === messageId) ?? null;
+    setMenuMessageShown(snap);
     setMenu(buildMenuState(messageId, mine));
   }
 
@@ -1140,7 +1160,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     await toggleReaction(messageId, DOUBLE_TAP_REACTION);
   }
 
-  const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
+  const menuView = menu ?? (menuPresence.mounted ? menuShown : null);
+  const menuMessageLive = menuView
+    ? messages.find((m) => m.id === menuView.messageId) ?? null
+    : null;
+  // Keep snapshot through exit (e.g. after delete) so fade-out isn't cut off.
+  const menuMessage =
+    menuMessageLive ?? (menuPresence.mounted ? menuMessageShown : null);
   const mediaShown = mediaViewer ?? (mediaPresence.mounted ? mediaViewerShown : null);
 
   return (
@@ -1481,10 +1507,16 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           : null}
       </div>
 
-      {portalReady && menu && menuMessage
+      {portalReady && menuPresence.mounted && menuView && menuMessage
         ? createPortal(
             <div
-              className={`chat-focus${menu.mine ? " chat-focus--mine" : " chat-focus--theirs"}`}
+              className={[
+                "chat-focus",
+                menuView.mine ? "chat-focus--mine" : "chat-focus--theirs",
+                menuPresence.visible ? "is-open" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role="dialog"
               aria-modal="true"
               aria-label="Действия с сообщением"
@@ -1498,16 +1530,16 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               <div
                 className="chat-focus__bubble"
                 style={{
-                  top: menu.top,
-                  left: menu.left,
-                  width: menu.width,
-                  minHeight: menu.height,
+                  top: menuView.top,
+                  left: menuView.left,
+                  width: menuView.width,
+                  minHeight: menuView.height,
                 }}
               >
                 <div
                   className={[
                     "chat-bubble",
-                    menu.mine ? "chat-bubble--mine" : "chat-bubble--theirs",
+                    menuView.mine ? "chat-bubble--mine" : "chat-bubble--theirs",
                     isStickerBody(menuMessage.body, menuMessage.attachments)
                       ? "chat-bubble--sticker"
                       : "",
@@ -1568,10 +1600,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               <div
                 className="chat-focus__reactions"
                 style={{
-                  top: Math.max(8, menu.top - FOCUS_REACTIONS_H - 8),
-                  left: menu.mine ? undefined : menu.left,
-                  right: menu.mine
-                    ? Math.max(8, window.innerWidth - menu.left - menu.width)
+                  top: Math.max(8, menuView.top - FOCUS_REACTIONS_H - 8),
+                  left: menuView.mine ? undefined : menuView.left,
+                  right: menuView.mine
+                    ? Math.max(8, window.innerWidth - menuView.left - menuView.width)
                     : undefined,
                 }}
               >
@@ -1598,18 +1630,18 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
               <div
                 className="chat-focus__menu"
                 style={{
-                  ...(menu.menuAbove
+                  ...(menuView.menuAbove
                     ? {
                         /* Above reactions, which sit above the bubble */
                         top: Math.max(
                           8,
-                          menu.top - FOCUS_REACTIONS_H - 16 - FOCUS_MENU_ESTIMATE,
+                          menuView.top - FOCUS_REACTIONS_H - 16 - FOCUS_MENU_ESTIMATE,
                         ),
                       }
-                    : { top: menu.top + menu.height + 8 }),
-                  left: menu.mine ? undefined : menu.left,
-                  right: menu.mine
-                    ? Math.max(8, window.innerWidth - menu.left - menu.width)
+                    : { top: menuView.top + menuView.height + 8 }),
+                  left: menuView.mine ? undefined : menuView.left,
+                  right: menuView.mine
+                    ? Math.max(8, window.innerWidth - menuView.left - menuView.width)
                     : undefined,
                 }}
               >
@@ -1671,47 +1703,51 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             onClick={() => setStickersOpen(false)}
           />
           <div
-            className={stickersPresence.visible ? "chat-stickers is-open" : "chat-stickers"}
-            role="dialog"
-            aria-label="Стикеры"
-            aria-modal="true"
+            ref={stickersSlotRef}
+            className={
+              stickersPresence.visible ? "chat-stickers-slot is-open" : "chat-stickers-slot"
+            }
           >
-            <div className="chat-stickers__handle" aria-hidden />
-            <div className="chat-stickers__top">
-              <h3 className="chat-stickers__title">Стикеры</h3>
-              <button
-                type="button"
-                className="chat-icon-btn"
-                aria-label="Закрыть"
-                onClick={() => setStickersOpen(false)}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="chat-stickers__grid">
-              {sortedStickers.map((item: StickerItem) =>
-                item.type === "emoji" ? (
+            <div className="chat-stickers-slot__clip">
+              <div className="chat-stickers" role="dialog" aria-label="Стикеры" aria-modal="true">
+                <div className="chat-stickers__handle" aria-hidden />
+                <div className="chat-stickers__top">
+                  <h3 className="chat-stickers__title">Стикеры</h3>
                   <button
-                    key={`e-${item.value}`}
                     type="button"
-                    className="chat-stickers__btn"
-                    onClick={() => void sendBody(item.value)}
+                    className="chat-icon-btn"
+                    aria-label="Закрыть"
+                    onClick={() => setStickersOpen(false)}
                   >
-                    {item.value}
+                    <CloseIcon />
                   </button>
-                ) : (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="chat-stickers__btn chat-stickers__btn--image"
-                    aria-label={item.label}
-                    onClick={() => void sendBody(encodeStickerToken(item.id))}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.src} alt="" draggable={false} />
-                  </button>
-                ),
-              )}
+                </div>
+                <div className="chat-stickers__grid">
+                  {sortedStickers.map((item: StickerItem) =>
+                    item.type === "emoji" ? (
+                      <button
+                        key={`e-${item.value}`}
+                        type="button"
+                        className="chat-stickers__btn"
+                        onClick={() => void sendBody(item.value)}
+                      >
+                        {item.value}
+                      </button>
+                    ) : (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="chat-stickers__btn chat-stickers__btn--image"
+                        aria-label={item.label}
+                        onClick={() => void sendBody(encodeStickerToken(item.id))}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.src} alt="" draggable={false} />
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </>

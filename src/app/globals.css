@@ -1128,7 +1128,8 @@ select {
     transition: none !important;
   }
 
-  .chat-focus__reactions button {
+  .chat-focus__reactions button,
+  .chat-focus.is-open .chat-focus__reactions button {
     opacity: 1;
     transform: none;
     animation: none !important;
@@ -1145,6 +1146,10 @@ select {
   -webkit-touch-callout: none;
 }
 
+.chat-focus:not(.is-open) {
+  pointer-events: none;
+}
+
 .chat-focus__backdrop {
   position: absolute;
   inset: 0;
@@ -1154,6 +1159,12 @@ select {
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 280ms var(--ease);
+}
+
+.chat-focus.is-open .chat-focus__backdrop {
+  opacity: 1;
 }
 
 .chat-focus__bubble {
@@ -1161,7 +1172,16 @@ select {
   z-index: 2;
   pointer-events: none;
   filter: drop-shadow(0 10px 28px rgba(42, 24, 25, 0.22));
-  animation: chat-focus-pop 160ms var(--ease) both;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 240ms var(--ease),
+    transform 260ms var(--ease);
+}
+
+.chat-focus.is-open .chat-focus__bubble {
+  opacity: 1;
+  transform: none;
 }
 
 .chat-focus__bubble .chat-bubble {
@@ -1170,6 +1190,7 @@ select {
 
 .chat-bubble--focus {
   transform: scale(1.02);
+  transition: transform 260ms var(--ease);
 }
 
 .chat-focus__reactions {
@@ -1183,7 +1204,16 @@ select {
   background: color-mix(in srgb, var(--surface) 94%, white);
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   box-shadow: var(--shadow);
-  animation: chat-focus-pop 160ms var(--ease) both;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 240ms var(--ease),
+    transform 260ms var(--ease);
+}
+
+.chat-focus.is-open .chat-focus__reactions {
+  opacity: 1;
+  transform: none;
 }
 
 .chat-focus__reactions button {
@@ -1196,9 +1226,12 @@ select {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  /* Visible immediately so a quick tap registers — entrance is a soft pop, not a delayed reveal */
   opacity: 1;
   transform: scale(1);
+}
+
+/* Start emoji motion only after overlay opens (avoids animating while faded out). */
+.chat-focus.is-open .chat-focus__reactions button {
   animation:
     chat-focus-emoji-in 220ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 20ms) both,
     chat-focus-emoji-idle 1.8s ease-in-out calc(0.28s + var(--i, 0) * 90ms) infinite;
@@ -1261,8 +1294,17 @@ select {
   background: color-mix(in srgb, var(--surface) 96%, white);
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   box-shadow: var(--shadow);
-  animation: chat-focus-pop 180ms var(--ease) both;
   overflow: hidden;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 240ms var(--ease),
+    transform 260ms var(--ease);
+}
+
+.chat-focus.is-open .chat-focus__menu {
+  opacity: 1;
+  transform: none;
 }
 
 .chat-focus__menu > button {
@@ -1299,23 +1341,24 @@ select {
   color: var(--danger);
 }
 
-@keyframes chat-focus-pop {
-  from {
-    opacity: 0.55;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .chat-focus__backdrop,
   .chat-focus__bubble,
   .chat-focus__reactions,
   .chat-focus__menu,
   .chat-bubble--focus {
-    animation: none !important;
+    transition: none !important;
+  }
+
+  .chat-focus.is-open .chat-focus__backdrop,
+  .chat-focus.is-open .chat-focus__bubble,
+  .chat-focus.is-open .chat-focus__reactions,
+  .chat-focus.is-open .chat-focus__menu {
+    opacity: 1;
+    transform: none;
+  }
+
+  .chat-bubble--focus {
     transform: none !important;
   }
 }
@@ -1355,9 +1398,9 @@ select {
 }
 
 /* One seam between chrome blocks (stickers / reply / composer) */
-.chat-stickers + .chat-composer-bar,
-.chat-stickers + .chat-error,
-.chat-stickers + .chat-composer,
+.chat-stickers-slot + .chat-composer-bar,
+.chat-stickers-slot + .chat-error,
+.chat-stickers-slot + .chat-composer,
 .chat-composer-bar + .chat-error,
 .chat-composer-bar + .chat-composer,
 .chat-error + .chat-composer {
@@ -1783,42 +1826,47 @@ select {
   opacity: 1;
 }
 
-.chat-stickers {
+/* Animate real content height (0fr→1fr) — max-height jerked at the end. */
+.chat-stickers-slot {
   position: relative;
   z-index: 5;
   flex-shrink: 0;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 380ms var(--ease);
+}
+
+.chat-stickers-slot.is-open {
+  grid-template-rows: 1fr;
+}
+
+.chat-stickers-slot__clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.chat-stickers {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  max-height: 0;
-  padding: 0 0.65rem;
-  overflow: hidden;
+  gap: 0.35rem;
+  max-height: min(42dvh, 320px);
+  padding: 0.35rem 0.65rem 0.55rem;
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--surface) 96%, white) 0%,
     var(--composer-bar) 100%
   );
-  border-top: 1px solid transparent;
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   border-radius: 18px 18px 0 0;
-  box-shadow: none;
+  box-shadow: 0 -10px 28px rgba(74, 24, 40, 0.08);
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(10px);
   transition:
-    max-height 380ms var(--ease),
     opacity 280ms var(--ease),
-    transform 380ms var(--ease),
-    padding 380ms var(--ease),
-    border-color 280ms var(--ease),
-    gap 380ms var(--ease),
-    box-shadow 380ms var(--ease);
+    transform 380ms var(--ease);
 }
 
-.chat-stickers.is-open {
-  max-height: min(42dvh, 320px);
-  gap: 0.35rem;
-  padding: 0.35rem 0.65rem 0.55rem;
-  border-top-color: color-mix(in srgb, var(--line) 55%, transparent);
-  box-shadow: 0 -10px 28px rgba(74, 24, 40, 0.08);
+.chat-stickers-slot.is-open .chat-stickers {
   opacity: 1;
   transform: none;
 }
@@ -1895,7 +1943,8 @@ select {
   pointer-events: none;
 }
 
-.chat-stickers:not(.is-open),
+.chat-stickers-slot:not(.is-open),
+.chat-stickers-slot:not(.is-open) .chat-stickers,
 .chat-stickers__scrim:not(.is-open) {
   pointer-events: none;
 }
@@ -1906,13 +1955,10 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .chat-stickers-slot,
   .chat-stickers,
   .chat-stickers__scrim {
     transition: none;
-  }
-
-  .chat-stickers.is-open {
-    max-height: min(42dvh, 320px);
   }
 
   .chat-stickers__btn {
