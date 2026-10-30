@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 
 type Author = { id: string; displayName: string };
@@ -10,7 +11,7 @@ type Comment = {
   body: string;
   createdAt: string;
   authorId: string;
-  author: Author;
+  author?: Author | null;
 };
 
 type Item = {
@@ -41,6 +42,8 @@ export function AlbumClient({ meId }: { meId: string }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyComment, setBusyComment] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<Item | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
 
   function normalizeItem(raw: Partial<Item> & { id: string }): Item {
     const comments = Array.isArray(raw.comments) ? raw.comments : [];
@@ -73,6 +76,24 @@ export function AlbumClient({ meId }: { meId: string }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setViewer(null);
+    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [viewer]);
 
   useEffect(() => {
     return () => {
@@ -228,17 +249,22 @@ export function AlbumClient({ meId }: { meId: string }) {
                     <span className="album-post__author">{item.author.displayName}</span>
                     <span className="album-post__meta">{formatWhen(item.createdAt)}</span>
                   </header>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="album-post__shot"
-                    src={item.filePath}
-                    alt={item.caption || "Фото"}
-                  />
+                  <button
+                    type="button"
+                    className="album-post__shot-btn"
+                    onClick={() => setViewer(item)}
+                    aria-label="Открыть фото"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="album-post__shot"
+                      src={item.filePath}
+                      alt={item.caption || "Фото"}
+                    />
+                  </button>
                   <div className="album-post__body">
                     {item.caption ? (
-                      <p className="album-post__caption">
-                        <strong>{item.author.displayName}</strong> {item.caption}
-                      </p>
+                      <p className="album-post__caption">{item.caption}</p>
                     ) : null}
 
                     {item.commentCount > 1 && !open ? (
@@ -266,23 +292,26 @@ export function AlbumClient({ meId }: { meId: string }) {
                     ) : null}
 
                     <ul className="album-comments">
-                      {visible.map((c) => (
-                        <li key={c.id} className="album-comments__item">
-                          <p>
-                            <strong>{c.author.displayName}</strong> {c.body}
-                          </p>
-                          {c.authorId === meId || c.author.id === meId ? (
-                            <button
-                              type="button"
-                              className="album-comments__del"
-                              aria-label="Удалить комментарий"
-                              onClick={() => void deleteComment(item.id, c.id)}
-                            >
-                              ×
-                            </button>
-                          ) : null}
-                        </li>
-                      ))}
+                      {visible.map((c) => {
+                        const mine = c.authorId === meId || c.author?.id === meId;
+                        return (
+                          <li key={c.id} className="album-comments__item">
+                            <p>
+                              <strong>{c.author?.displayName || "…"}</strong> {c.body}
+                            </p>
+                            {mine ? (
+                              <button
+                                type="button"
+                                className="album-comments__del"
+                                aria-label="Удалить комментарий"
+                                onClick={() => void deleteComment(item.id, c.id)}
+                              >
+                                ×
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
 
                     <div className="album-comment-form">
@@ -321,6 +350,42 @@ export function AlbumClient({ meId }: { meId: string }) {
             })
           : null}
       </div>
+
+      {portalReady && viewer
+        ? createPortal(
+            <div
+              className="album-viewer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Просмотр фото"
+            >
+              <button
+                type="button"
+                className="album-viewer__backdrop"
+                aria-label="Закрыть"
+                onClick={() => setViewer(null)}
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="album-viewer__img"
+                src={viewer.filePath}
+                alt={viewer.caption || "Фото"}
+              />
+              <button
+                type="button"
+                className="album-viewer__close"
+                aria-label="Закрыть"
+                onClick={() => setViewer(null)}
+              >
+                ×
+              </button>
+              {viewer.caption ? (
+                <p className="album-viewer__caption">{viewer.caption}</p>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
