@@ -2931,18 +2931,32 @@ select {
 
 /* —— Shared journal diary —— */
 .diary-page {
+  position: relative;
+  isolation: isolate;
   margin: -1rem -1rem -1.25rem;
   padding: 1rem 1rem 1.25rem;
-  min-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom) - 2rem);
+  /* Fill the content column above the nav (no short -2rem gap). */
+  min-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
+  background: transparent;
+}
+
+.diary-page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  /* Extend wallpaper under the fixed bottom nav — kills the gray strip. */
+  bottom: calc(-1 * (var(--bottom-nav-h) + var(--safe-bottom)));
   background-color: var(--paper);
   background-image: url("/art/wallpaper-diary.jpg?v=6");
   background-image: image-set(
     url("/art/wallpaper-diary.webp?v=6") type("image/webp"),
     url("/art/wallpaper-diary.jpg?v=6") type("image/jpeg")
   );
-  background-size: 320px auto;
+  background-size: 360px auto;
   background-repeat: repeat;
   background-position: center top;
+  pointer-events: none;
 }
 
 .diary {
