@@ -286,6 +286,9 @@ export function AlbumClient({ meId }: { meId: string }) {
                       className="album-post__shot"
                       src={item.filePath}
                       alt={item.caption || "Фото"}
+                      loading={i < 2 ? "eager" : "lazy"}
+                      decoding="async"
+                      fetchPriority={i === 0 ? "high" : "auto"}
                     />
                   </button>
                   <div className="album-post__body">
@@ -408,6 +411,8 @@ export function AlbumClient({ meId }: { meId: string }) {
                 className="album-viewer__img"
                 src={albumShown.filePath}
                 alt={albumShown.caption || "Фото"}
+                decoding="async"
+                fetchPriority="high"
               />
               <button
                 type="button"

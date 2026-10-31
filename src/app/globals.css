@@ -3400,16 +3400,29 @@ select {
   padding: 0;
   margin: 0;
   border: 0;
-  background: var(--paper-deep);
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--paper-deep) 88%, white) 0%,
+      color-mix(in srgb, var(--line) 35%, var(--paper-deep)) 45%,
+      color-mix(in srgb, var(--paper-deep) 88%, white) 100%
+    );
+  background-size: 200% 100%;
   cursor: zoom-in;
+  overflow: hidden;
 }
 
 .album-post__shot {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 5;
+  height: auto;
   object-fit: cover;
+  object-position: center;
   pointer-events: none;
+  background: transparent;
+  content-visibility: auto;
+  contain-intrinsic-size: 400px 500px;
 }
 
 .album-post__body {
