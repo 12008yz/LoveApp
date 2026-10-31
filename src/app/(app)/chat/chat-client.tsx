@@ -207,6 +207,36 @@ function CloseIcon() {
   );
 }
 
+function ReadChecksIcon() {
+  return (
+    <svg
+      className="chat-read-ticks__icon"
+      viewBox="0 0 16 12"
+      width="14"
+      height="10"
+      aria-hidden
+      focusable="false"
+    >
+      <path
+        d="M1.2 6.2 3.8 8.8 8.6 2.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.4 8.8 7.2 10.4 14.2 2.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <ChatSvgIcon>
@@ -1448,11 +1478,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                       {mine ? (
                         <span
                           className={
-                            m.readAt ? "chat-read-dot chat-read-dot--read" : "chat-read-dot"
+                            m.readAt ? "chat-read-ticks chat-read-ticks--read" : "chat-read-ticks"
                           }
                           aria-label={m.readAt ? "Прочитано" : "Не прочитано"}
                           title={m.readAt ? "Прочитано" : "Не прочитано"}
-                        />
+                        >
+                          <ReadChecksIcon />
+                        </span>
                       ) : null}
                     </span>
                   </div>

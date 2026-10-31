@@ -1740,54 +1740,53 @@ select {
   color: color-mix(in srgb, var(--rose-deep) 42%, var(--ink-soft));
 }
 
-.chat-read-dot {
-  display: inline-block;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 50%;
+.chat-read-ticks {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  background: #d45353;
-  box-shadow: 0 0 0 0 color-mix(in srgb, #d45353 35%, transparent);
+  margin-left: 0.05rem;
+  color: #d45353;
+  line-height: 0;
   animation: chat-read-pulse-unread 2.4s ease-in-out infinite;
 }
 
-.chat-read-dot--read {
-  background: #3faf7a;
-  box-shadow: 0 0 0 0 color-mix(in srgb, #3faf7a 35%, transparent);
+.chat-read-ticks--read {
+  color: #2f9d66;
   animation: chat-read-pulse-read 2.8s ease-in-out infinite;
+}
+
+.chat-read-ticks__icon {
+  display: block;
 }
 
 @keyframes chat-read-pulse-unread {
   0%,
   100% {
-    opacity: 0.72;
+    opacity: 0.78;
     transform: scale(1);
-    box-shadow: 0 0 0 0 color-mix(in srgb, #d45353 0%, transparent);
   }
   50% {
     opacity: 1;
-    transform: scale(1.12);
-    box-shadow: 0 0 0 3px color-mix(in srgb, #d45353 22%, transparent);
+    transform: scale(1.08);
   }
 }
 
 @keyframes chat-read-pulse-read {
   0%,
   100% {
-    opacity: 0.78;
+    opacity: 0.85;
     transform: scale(1);
-    box-shadow: 0 0 0 0 color-mix(in srgb, #3faf7a 0%, transparent);
   }
   50% {
     opacity: 1;
-    transform: scale(1.1);
-    box-shadow: 0 0 0 3px color-mix(in srgb, #3faf7a 20%, transparent);
+    transform: scale(1.06);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-read-dot,
-  .chat-read-dot--read {
+  .chat-read-ticks,
+  .chat-read-ticks--read {
     animation: none;
     opacity: 0.95;
   }
