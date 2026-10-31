@@ -8,12 +8,14 @@ export function UserAvatar({
   size = "md",
   className = "",
   onClick,
+  ariaLabel,
 }: {
   name: string;
   src?: string | null;
   size?: Size;
   className?: string;
   onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const cls = ["chat-avatar", `chat-avatar--${size}`, className].filter(Boolean).join(" ");
   const inner = src ? (
@@ -28,7 +30,12 @@ export function UserAvatar({
   if (!onClick) return inner;
 
   return (
-    <button type="button" className="user-avatar-btn" onClick={onClick} aria-label={`Профиль: ${name}`}>
+    <button
+      type="button"
+      className="user-avatar-btn"
+      onClick={onClick}
+      aria-label={ariaLabel || `Профиль: ${name}`}
+    >
       {inner}
     </button>
   );
