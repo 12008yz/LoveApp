@@ -1551,132 +1551,134 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 >
                   <ReplyIcon />
                 </span>
-                <div
-                  className={[
-                    "chat-bubble",
-                    mine ? "chat-bubble--mine" : "chat-bubble--theirs",
-                    lastInGroup ? "chat-bubble--tail" : "",
-                    sticker ? "chat-bubble--sticker" : "",
-                    m.replyTo ? "chat-bubble--with-quote" : "",
-                    hasMedia ? "chat-bubble--media" : "",
-                    swipeUI?.id === m.id && swipeUI.snapping ? "chat-bubble--swipe-snap" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  style={
-                    swipeUI?.id === m.id
-                      ? ({
-                          ["--swipe-x" as string]: `${swipeUI.dx}px`,
-                        } as CSSProperties)
-                      : undefined
-                  }
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    openMessageMenu(m.id, mine);
-                  }}
-                  onDoubleClick={(e) => {
-                    // Native dblclick selects text; we handle heart via pointer taps instead.
-                    e.preventDefault();
-                  }}
-                  onPointerDown={(e) => onBubblePointerDown(e, m, mine)}
-                  onPointerMove={(e) => onBubblePointerMove(e, m)}
-                  onPointerUp={(e) => onBubblePointerUp(e, m)}
-                  onPointerCancel={(e) => onBubblePointerCancel(e, m.id)}
-                >
-                  {m.replyTo ? (
-                    <button
-                      type="button"
-                      className="chat-quote"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        scrollToMessage(m.replyTo!.id);
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <strong className="chat-quote__author">{m.replyTo.author.displayName}</strong>
-                      <span className="chat-quote__text">
-                        {(() => {
-                          const raw = m.quoteText || m.replyTo.body;
-                          return stickerPreviewLabel(raw) ?? raw;
-                        })()}
-                      </span>
-                    </button>
-                  ) : null}
-                  {hasMedia ? (
-                    <div
-                      className={[
-                        "chat-media",
-                        attachments.length === 1
-                          ? "chat-media--1"
-                          : attachments.length === 2
-                            ? "chat-media--2"
-                            : attachments.length === 3
-                              ? "chat-media--3"
-                              : "chat-media--many",
-                      ].join(" ")}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      {attachments.map((att, idx) => (
-                        <button
-                          key={att.id}
-                          type="button"
-                          className="chat-media__item"
-                          onClick={() => setMediaViewer({ items: attachments, index: idx })}
-                          aria-label={att.kind === "video" ? "Открыть видео" : "Открыть фото"}
-                        >
-                          {att.kind === "video" ? (
-                            <>
-                              <video
+                <div className="chat-bubble-swipe">
+                  <div
+                    className={[
+                      "chat-bubble",
+                      mine ? "chat-bubble--mine" : "chat-bubble--theirs",
+                      lastInGroup ? "chat-bubble--tail" : "",
+                      sticker ? "chat-bubble--sticker" : "",
+                      m.replyTo ? "chat-bubble--with-quote" : "",
+                      hasMedia ? "chat-bubble--media" : "",
+                      swipeUI?.id === m.id && swipeUI.snapping ? "chat-bubble--swipe-snap" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={
+                      swipeUI?.id === m.id
+                        ? ({
+                            ["--swipe-x" as string]: `${swipeUI.dx}px`,
+                          } as CSSProperties)
+                        : undefined
+                    }
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      openMessageMenu(m.id, mine);
+                    }}
+                    onDoubleClick={(e) => {
+                      // Native dblclick selects text; we handle heart via pointer taps instead.
+                      e.preventDefault();
+                    }}
+                    onPointerDown={(e) => onBubblePointerDown(e, m, mine)}
+                    onPointerMove={(e) => onBubblePointerMove(e, m)}
+                    onPointerUp={(e) => onBubblePointerUp(e, m)}
+                    onPointerCancel={(e) => onBubblePointerCancel(e, m.id)}
+                  >
+                    {m.replyTo ? (
+                      <button
+                        type="button"
+                        className="chat-quote"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          scrollToMessage(m.replyTo!.id);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <strong className="chat-quote__author">{m.replyTo.author.displayName}</strong>
+                        <span className="chat-quote__text">
+                          {(() => {
+                            const raw = m.quoteText || m.replyTo.body;
+                            return stickerPreviewLabel(raw) ?? raw;
+                          })()}
+                        </span>
+                      </button>
+                    ) : null}
+                    {hasMedia ? (
+                      <div
+                        className={[
+                          "chat-media",
+                          attachments.length === 1
+                            ? "chat-media--1"
+                            : attachments.length === 2
+                              ? "chat-media--2"
+                              : attachments.length === 3
+                                ? "chat-media--3"
+                                : "chat-media--many",
+                        ].join(" ")}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {attachments.map((att, idx) => (
+                          <button
+                            key={att.id}
+                            type="button"
+                            className="chat-media__item"
+                            onClick={() => setMediaViewer({ items: attachments, index: idx })}
+                            aria-label={att.kind === "video" ? "Открыть видео" : "Открыть фото"}
+                          >
+                            {att.kind === "video" ? (
+                              <>
+                                <video
+                                  className="chat-media__thumb"
+                                  src={att.filePath}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                />
+                                <span className="chat-media__play" aria-hidden>
+                                  ▶
+                                </span>
+                              </>
+                            ) : (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
                                 className="chat-media__thumb"
                                 src={att.filePath}
-                                muted
-                                playsInline
-                                preload="metadata"
+                                alt=""
                               />
-                              <span className="chat-media__play" aria-hidden>
-                                ▶
-                              </span>
-                            </>
-                          ) : (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              className="chat-media__thumb"
-                              src={att.filePath}
-                              alt=""
-                            />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="chat-bubble__main">
-                    {m.body.trim() || !hasMedia ? (
-                      sticker ? (
-                        <StickerBody body={m.body} />
-                      ) : (
-                        <span className="chat-bubble__text">{m.body}</span>
-                      )
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     ) : null}
-                    <span className="chat-bubble__meta">
-                      {m.editedAt ? <span className="chat-edited">изм.</span> : null}
-                      <time dateTime={m.createdAt}>
-                        {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </time>
-                      {mine ? (
-                        <span
-                          className={
-                            m.readAt ? "chat-read-ticks chat-read-ticks--read" : "chat-read-ticks"
-                          }
-                          aria-label={m.readAt ? "Прочитано" : "Не прочитано"}
-                          title={m.readAt ? "Прочитано" : "Не прочитано"}
-                        >
-                          <ReadChecksIcon />
-                        </span>
+                    <div className="chat-bubble__main">
+                      {m.body.trim() || !hasMedia ? (
+                        sticker ? (
+                          <StickerBody body={m.body} />
+                        ) : (
+                          <span className="chat-bubble__text">{m.body}</span>
+                        )
                       ) : null}
-                    </span>
+                      <span className="chat-bubble__meta">
+                        {m.editedAt ? <span className="chat-edited">изм.</span> : null}
+                        <time dateTime={m.createdAt}>
+                          {new Date(m.createdAt).toLocaleTimeString("ru-RU", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </time>
+                        {mine ? (
+                          <span
+                            className={
+                              m.readAt ? "chat-read-ticks chat-read-ticks--read" : "chat-read-ticks"
+                            }
+                            aria-label={m.readAt ? "Прочитано" : "Не прочитано"}
+                            title={m.readAt ? "Прочитано" : "Не прочитано"}
+                          >
+                            <ReadChecksIcon />
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {reactBurst?.messageId === m.id ? (
