@@ -84,9 +84,9 @@ const LONG_PRESS_MS = 420;
 /** Gap between two short taps; must stay below LONG_PRESS_MS. */
 const DOUBLE_TAP_MS = 320;
 const DOUBLE_TAP_REACTION = CHAT_REACTIONS[0];
-/** Swipe-right distance to trigger reply (px). */
-const SWIPE_REPLY_THRESHOLD = 56;
-const SWIPE_REPLY_MAX = 72;
+/** Swipe-right distance to trigger reply (px) — kept short so it feels light. */
+const SWIPE_REPLY_THRESHOLD = 28;
+const SWIPE_REPLY_MAX = 44;
 const FOCUS_MENU_ESTIMATE = 268;
 const FOCUS_REACTIONS_H = 52;
 /** fly 0.88s + last particle delay (~168ms) */
@@ -1276,15 +1276,22 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     const rawDy = e.clientY - s.startY;
 
     if (!s.axis) {
-      if (Math.abs(rawDx) < 8 && Math.abs(rawDy) < 8) return;
-      s.axis = Math.abs(rawDx) > Math.abs(rawDy) * 1.2 ? "h" : "v";
-      if (s.axis === "h") {
+      const adx = Math.abs(rawDx);
+      const ady = Math.abs(rawDy);
+      if (adx < 6 && ady < 6) return;
+      // Right-swipe for reply; clear vertical wins so chat scroll stays smooth.
+      if (rawDx > 8 && adx > ady * 1.15) {
+        s.axis = "h";
         cancelPressTimer();
         try {
           e.currentTarget.setPointerCapture(e.pointerId);
         } catch {
           /* ignore */
         }
+      } else if (ady > adx * 1.05) {
+        s.axis = "v";
+      } else {
+        return;
       }
     }
 

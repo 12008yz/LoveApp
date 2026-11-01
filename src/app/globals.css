@@ -15,6 +15,8 @@
 html,
 body {
   min-height: 100%;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -26,6 +28,8 @@ body {
     radial-gradient(900px 480px at 100% 0%, var(--body-glow-b) 0%, transparent 50%),
     linear-gradient(165deg, var(--paper) 0%, var(--paper-deep) 55%, var(--paper-deep) 100%);
   background-attachment: fixed;
+  /* Kill sideways rubber-band fighting chat swipe-to-reply. */
+  overscroll-behavior-x: none;
 }
 
 a {
@@ -327,6 +331,8 @@ select {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr;
   padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  overflow-x: clip;
+  overscroll-behavior-x: none;
 }
 
 .app-shell--no-topbar {
@@ -582,6 +588,10 @@ select {
   background-repeat: repeat;
   background-position: 0 0;
   overflow: hidden;
+  overflow-x: clip;
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 .chat-header {
@@ -1593,13 +1603,17 @@ select {
 .chat-log {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.55rem 0.55rem 0.7rem;
   -webkit-overflow-scrolling: touch;
   overflow-anchor: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 
 .chat-empty {
@@ -1703,6 +1717,10 @@ select {
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
   transform: translateX(var(--swipe-x));
+}
+
+.chat-bubble-wrap.is-swiping {
+  touch-action: none;
 }
 
 .chat-bubble-wrap.is-swiping .chat-bubble {
