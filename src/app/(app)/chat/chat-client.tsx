@@ -4,6 +4,7 @@ import {
   FormEvent,
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -83,6 +84,9 @@ const LONG_PRESS_MS = 420;
 /** Gap between two short taps; must stay below LONG_PRESS_MS. */
 const DOUBLE_TAP_MS = 320;
 const DOUBLE_TAP_REACTION = CHAT_REACTIONS[0];
+/** Swipe-right distance to trigger reply (px). */
+const SWIPE_REPLY_THRESHOLD = 56;
+const SWIPE_REPLY_MAX = 72;
 const FOCUS_MENU_ESTIMATE = 268;
 const FOCUS_REACTIONS_H = 52;
 /** fly 0.88s + last particle delay (~168ms) */
@@ -454,6 +458,19 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const stickToBottom = useRef(true);
   const reactingIds = useRef(new Set<string>());
   const lastTap = useRef<{ id: string; at: number } | null>(null);
+  const swipeRef = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    dx: number;
+    axis: "h" | "v" | null;
+    pointerId: number;
+  } | null>(null);
+  const [swipeUI, setSwipeUI] = useState<{
+    id: string;
+    dx: number;
+    snapping: boolean;
+  } | null>(null);
 
   function isNearBottom(el: HTMLElement, threshold = 100) {
     return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
@@ -463,6 +480,35 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
+  }
+
+  /** Soft pin after layout (reactions / keyboard) without fighting mid-history scroll. */
+  function softScrollToBottomIfNeeded(force = false) {
+    const el = logRef.current;
+    if (!el) return;
+    if (!force && !stickToBottom.current && !isNearBottom(el, 140)) return;
+    stickToBottom.current = true;
+    requestAnimationFrame(() => {
+      scrollLogToBottom();
+      requestAnimationFrame(scrollLogToBottom);
+    });
+  }
+  const softScrollRef = useRef(softScrollToBottomIfNeeded);
+  softScrollRef.current = softScrollToBottomIfNeeded;
+
+  function keepComposerFocused() {
+    const el = textareaRef.current;
+    if (!el) return;
+    // preventScroll avoids jumping the page when restoring mobile keyboard focus
+    el.focus({ preventScroll: true });
+    requestAnimationFrame(() => el.focus({ preventScroll: true }));
+  }
+
+  function resetSwipeUI(id: string) {
+    setSwipeUI({ id, dx: 0, snapping: true });
+    window.setTimeout(() => {
+      setSwipeUI((cur) => (cur?.id === id ? null : cur));
+    }, 200);
   }
 
   // Pin log to bottom as sticker slot height changes (smooth grid collapse).
@@ -600,13 +646,19 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           );
         }
         if (payload.type === "reaction" && payload.messageId) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === payload.messageId
+          const reactedId = String(payload.messageId);
+          setMessages((prev) => {
+            const isLast = prev.length > 0 && prev[prev.length - 1]?.id === reactedId;
+            const next = prev.map((m) =>
+              m.id === reactedId
                 ? { ...m, reactions: payload.reactions as AggregatedReaction[] }
                 : m,
-            ),
-          );
+            );
+            if (isLast) {
+              queueMicrotask(() => softScrollRef.current());
+            }
+            return next;
+          });
         }
         if (payload.type === "pin") {
           const id = (payload.messageId as string | null) ?? null;
@@ -825,6 +877,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       if (json.message) {
         stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
+        softScrollToBottomIfNeeded(true);
       }
       if (recordStickerUsageFromBody(trimmed)) {
         setStickerUsage(readStickerUsage());
@@ -836,6 +889,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     } finally {
       setSending(false);
       setStickersOpen(false);
+      keepComposerFocused();
     }
   }
 
@@ -855,6 +909,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       if (json.message) {
         stickToBottom.current = true;
         setMessages((prev) => mergeById(prev, [json.message as MessageDto]));
+        softScrollToBottomIfNeeded(true);
       }
       setText("");
       clearPendingMedia();
@@ -864,11 +919,13 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     } finally {
       setSending(false);
       setStickersOpen(false);
+      keepComposerFocused();
     }
   }
 
   async function send(e: FormEvent) {
     e.preventDefault();
+    keepComposerFocused();
     if (pendingMedia.length) {
       await sendMedia(text);
       return;
@@ -988,12 +1045,14 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         return;
       }
       const next = (json.reactions as AggregatedReaction[]) || [];
+      const isLast = messages[messages.length - 1]?.id === messageId;
       setMessages((prev) =>
         prev.map((m) => (m.id === messageId ? { ...m, reactions: next } : m)),
       );
       const nowMine = next.some((r) => r.emoji === emoji && r.me);
       if (!wasMine && nowMine) playReactBurst(messageId, emoji);
-      // No scroll on reaction — padding alone shifts layout; scroll was thrashing long-press.
+      // Only nudge when the last bubble grows (reaction chip) so it stays in view.
+      if (isLast) softScrollToBottomIfNeeded();
     } catch {
       setError("Реакция не сохранилась");
     } finally {
@@ -1163,6 +1222,15 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     }
   }
 
+  function cancelPressTimer() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+    lastTap.current = null;
+  }
+
   function endPress(messageId: string) {
     // Short press only — long-press already opened the menu (timer cleared).
     const wasShortPress = Boolean(pressTimer.current);
@@ -1180,6 +1248,98 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
       return;
     }
     lastTap.current = { id: messageId, at: now };
+  }
+
+  function onBubblePointerDown(
+    e: ReactPointerEvent<HTMLDivElement>,
+    message: MessageDto,
+    mine: boolean,
+  ) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    swipeRef.current = {
+      id: message.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      dx: 0,
+      axis: null,
+      pointerId: e.pointerId,
+    };
+    startPress(message.id, mine, e.clientX, e.clientY);
+  }
+
+  function onBubblePointerMove(e: ReactPointerEvent<HTMLDivElement>, message: MessageDto) {
+    movePress(e.clientX, e.clientY);
+    const s = swipeRef.current;
+    if (!s || s.id !== message.id) return;
+
+    const rawDx = e.clientX - s.startX;
+    const rawDy = e.clientY - s.startY;
+
+    if (!s.axis) {
+      if (Math.abs(rawDx) < 8 && Math.abs(rawDy) < 8) return;
+      s.axis = Math.abs(rawDx) > Math.abs(rawDy) * 1.2 ? "h" : "v";
+      if (s.axis === "h") {
+        cancelPressTimer();
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    if (s.axis !== "h") return;
+    // Reply swipe is always to the right (Telegram-style).
+    const dx = Math.max(0, Math.min(SWIPE_REPLY_MAX, rawDx));
+    s.dx = dx;
+    if (e.cancelable) e.preventDefault();
+    setSwipeUI({ id: message.id, dx, snapping: false });
+  }
+
+  function onBubblePointerUp(e: ReactPointerEvent<HTMLDivElement>, message: MessageDto) {
+    const s = swipeRef.current;
+    const horizontal = Boolean(s && s.id === message.id && s.axis === "h");
+    const triggered = Boolean(horizontal && s && s.dx >= SWIPE_REPLY_THRESHOLD);
+
+    if (s && s.id === message.id) {
+      try {
+        if (e.currentTarget.hasPointerCapture(s.pointerId)) {
+          e.currentTarget.releasePointerCapture(s.pointerId);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    swipeRef.current = null;
+
+    if (horizontal) {
+      cancelPressTimer();
+      if (triggered) {
+        resetSwipeUI(message.id);
+        openReply(message);
+      } else {
+        resetSwipeUI(message.id);
+      }
+      return;
+    }
+
+    endPress(message.id);
+  }
+
+  function onBubblePointerCancel(e: ReactPointerEvent<HTMLDivElement>, messageId: string) {
+    const s = swipeRef.current;
+    if (s && s.id === messageId) {
+      try {
+        if (e.currentTarget.hasPointerCapture(s.pointerId)) {
+          e.currentTarget.releasePointerCapture(s.pointerId);
+        }
+      } catch {
+        /* ignore */
+      }
+      swipeRef.current = null;
+      resetSwipeUI(messageId);
+    }
+    cancelPressTimer();
   }
 
   /** Double-tap adds ❤️; if already yours, just replay the burst (don't remove). */
@@ -1355,10 +1515,35 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                 </div>
               ) : null}
               <div
-                className={
-                  m.reactions?.length ? "chat-bubble-wrap chat-bubble-wrap--reacted" : "chat-bubble-wrap"
-                }
+                className={[
+                  "chat-bubble-wrap",
+                  m.reactions?.length ? "chat-bubble-wrap--reacted" : "",
+                  swipeUI?.id === m.id && swipeUI.dx > 0 ? "is-swiping" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
+                <span
+                  className={[
+                    "chat-swipe-hint",
+                    swipeUI?.id === m.id && swipeUI.dx >= SWIPE_REPLY_THRESHOLD
+                      ? "is-armed"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  style={
+                    swipeUI?.id === m.id
+                      ? {
+                          opacity: Math.min(1, swipeUI.dx / SWIPE_REPLY_THRESHOLD),
+                          transform: `scale(${0.75 + Math.min(1, swipeUI.dx / SWIPE_REPLY_THRESHOLD) * 0.35})`,
+                        }
+                      : undefined
+                  }
+                  aria-hidden
+                >
+                  <ReplyIcon />
+                </span>
                 <div
                   className={[
                     "chat-bubble",
@@ -1367,9 +1552,17 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     sticker ? "chat-bubble--sticker" : "",
                     m.replyTo ? "chat-bubble--with-quote" : "",
                     hasMedia ? "chat-bubble--media" : "",
+                    swipeUI?.id === m.id && swipeUI.snapping ? "chat-bubble--swipe-snap" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
+                  style={
+                    swipeUI?.id === m.id
+                      ? ({
+                          ["--swipe-x" as string]: `${swipeUI.dx}px`,
+                        } as CSSProperties)
+                      : undefined
+                  }
                   onContextMenu={(e) => {
                     e.preventDefault();
                     openMessageMenu(m.id, mine);
@@ -1378,20 +1571,10 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
                     // Native dblclick selects text; we handle heart via pointer taps instead.
                     e.preventDefault();
                   }}
-                  onPointerDown={(e) => {
-                    if (e.pointerType === "mouse" && e.button !== 0) return;
-                    startPress(m.id, mine, e.clientX, e.clientY);
-                  }}
-                  onPointerMove={(e) => movePress(e.clientX, e.clientY)}
-                  onPointerUp={() => endPress(m.id)}
-                  onPointerCancel={() => {
-                    if (pressTimer.current) {
-                      clearTimeout(pressTimer.current);
-                      pressTimer.current = null;
-                    }
-                    pressStart.current = null;
-                    lastTap.current = null;
-                  }}
+                  onPointerDown={(e) => onBubblePointerDown(e, m, mine)}
+                  onPointerMove={(e) => onBubblePointerMove(e, m)}
+                  onPointerUp={(e) => onBubblePointerUp(e, m)}
+                  onPointerCancel={(e) => onBubblePointerCancel(e, m.id)}
                 >
                   {m.replyTo ? (
                     <button
@@ -1892,6 +2075,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           className="chat-send"
           disabled={sending || (!text.trim() && !pendingMedia.length)}
           aria-label="Отправить"
+          // Keep focus on textarea (desktop). Touch uses keepComposerFocused after send —
+          // avoid preventDefault on pointerdown (it can cancel the submit click).
+          onMouseDown={(e) => e.preventDefault()}
         >
           <SendIcon />
         </button>

@@ -407,198 +407,214 @@ export function MiniProfile({
             <BackChevron />
           </button>
           <h2 className="mini-profile__title">Личный профиль</h2>
-          {me ? (
+          <div className="mini-profile__top-actions">
+            {me ? (
+              <button
+                type="button"
+                className="mini-profile__edit-btn"
+                aria-label={editing ? "Редактирование открыто" : "Изменить мой профиль"}
+                aria-pressed={editing}
+                onClick={() => setEditing(true)}
+              >
+                <EditIcon />
+              </button>
+            ) : null}
             <button
               type="button"
-              className="mini-profile__edit-btn"
-              aria-label={editing ? "Закрыть редактирование" : "Изменить мой профиль"}
-              onClick={() => setEditing((v) => !v)}
+              className="mini-profile__close-btn"
+              aria-label={editing ? "Закрыть редактирование" : "Закрыть профиль"}
+              onClick={() => {
+                if (editing) setEditing(false);
+                else onClose();
+              }}
             >
-              {editing ? <CloseIcon /> : <EditIcon />}
+              <CloseIcon />
             </button>
-          ) : null}
+          </div>
         </div>
 
-        {error ? <p className="error-text">{error}</p> : null}
+        <div className="mini-profile__body">
+          {error ? <p className="error-text">{error}</p> : null}
 
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/*"
-          className="mini-profile__file-input"
-          aria-hidden
-          tabIndex={-1}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void uploadAvatarFile(file);
-          }}
-        />
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="mini-profile__file-input"
+            aria-hidden
+            tabIndex={-1}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadAvatarFile(file);
+            }}
+          />
 
-        {primary ? (
-          <section className="mini-profile__identity">
-            <div className="mini-profile__avatar-wrap">
-              <UserAvatar
-                name={primary.displayName}
-                src={primaryAvatarSrc}
-                size="xl"
-                onClick={canClickPrimaryAvatar ? onPrimaryAvatarClick : undefined}
-                ariaLabel={
-                  primaryIsMe
-                    ? "Заменить фото профиля"
-                    : `Открыть фото: ${primary.displayName}`
+          {primary ? (
+            <section className="mini-profile__identity">
+              <div className="mini-profile__avatar-wrap">
+                <UserAvatar
+                  name={primary.displayName}
+                  src={primaryAvatarSrc}
+                  size="xl"
+                  onClick={canClickPrimaryAvatar ? onPrimaryAvatarClick : undefined}
+                  ariaLabel={
+                    primaryIsMe
+                      ? "Заменить фото профиля"
+                      : `Открыть фото: ${primary.displayName}`
+                  }
+                />
+                {primaryIsMe ? (
+                  <span className={`mini-profile__avatar-hint${avatarBusy ? " is-busy" : ""}`} aria-hidden>
+                    {avatarBusy ? "…" : "✎"}
+                  </span>
+                ) : primary.avatarPath ? (
+                  <span className="mini-profile__avatar-hint mini-profile__avatar-hint--view" aria-hidden>
+                    ↗
+                  </span>
+                ) : null}
+              </div>
+              <div className="mini-profile__identity-text">
+                <h3>{primary.displayName}</h3>
+                <p>
+                  {avatarBusy && primaryIsMe
+                    ? "Сохраняем фото…"
+                    : primaryIsMe
+                      ? "Это вы"
+                      : "Партнёр"}
+                </p>
+              </div>
+            </section>
+          ) : (
+            <p className="muted">Загрузка…</p>
+          )}
+
+          {flames ? (
+            <section className="mini-profile__flames">
+              <div className="mini-profile__flame-head">
+                <div>
+                  <p className="mini-profile__flame-count">{flames.streak}</p>
+                  <p className="mini-profile__flame-label">{streakLabel(flames.streak)}</p>
+                </div>
+                <p className="mini-profile__flame-status">
+                  {flames.sharedToday
+                    ? "Сегодня оба зажгли — день засчитан"
+                    : flames.meChecked
+                      ? "Ты уже зажёг(ла). Ждём партнёра"
+                      : flames.partnerChecked
+                        ? "Партнёр уже зажёг(ла). Твой ход"
+                        : "Нажми огонёк — раз в день оба зажигаете серию"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={[
+                  "mini-profile__flame-btn",
+                  `is-${mainTone}`,
+                  igniting ? "is-igniting" : "",
+                  flames.meChecked ? "is-done" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                disabled={flameBusy || flames.meChecked}
+                aria-label={
+                  flames.meChecked
+                    ? "Огонёк на сегодня уже зажжён"
+                    : flameBusy
+                      ? "Зажигаем…"
+                      : "Зажечь огонёк"
                 }
-              />
-              {primaryIsMe ? (
-                <span className={`mini-profile__avatar-hint${avatarBusy ? " is-busy" : ""}`} aria-hidden>
-                  {avatarBusy ? "…" : "✎"}
+                onClick={() => void checkInFlame()}
+              >
+                <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--main" />
+                <span className="mini-profile__flame-btn-hint">
+                  {flames.meChecked
+                    ? flames.sharedToday
+                      ? "Горит вместе"
+                      : "Зажжено"
+                    : flameBusy
+                      ? "…"
+                      : "Зажечь"}
                 </span>
-              ) : primary.avatarPath ? (
-                <span className="mini-profile__avatar-hint mini-profile__avatar-hint--view" aria-hidden>
-                  ↗
-                </span>
+              </button>
+
+              <div className="mini-profile__flame-sides" aria-label="Статус огоньков пары">
+                <div className={`mini-profile__flame-side${flames.meChecked ? " is-on" : ""}`}>
+                  <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--side" />
+                  <span>Вы</span>
+                </div>
+                <div className={`mini-profile__flame-side${flames.partnerChecked ? " is-on" : ""}`}>
+                  <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--side" />
+                  <span>Партнёр</span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {editing && me ? (
+            <form className="mini-profile__edit" onSubmit={onSave}>
+              <p className="mini-profile__section-title">Редактирование</p>
+              <p className="mini-profile__edit-hint muted">
+                {primaryIsMe
+                  ? "Фото меняется по нажатию на аватар сверху"
+                  : "Своё фото можно сменить в своём профиле (аватар сверху — партнёр)"}
+              </p>
+              <div className="field">
+                <label htmlFor="mini-name">Имя</label>
+                <input
+                  id="mini-name"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  maxLength={40}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="mini-pass">Новый пароль (необязательно)</label>
+                <input
+                  id="mini-pass"
+                  type="password"
+                  value={passwordDraft}
+                  onChange={(e) => setPasswordDraft(e.target.value)}
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder="Минимум 6 символов"
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                {busy ? "Сохраняем…" : "Сохранить"}
+              </button>
+            </form>
+          ) : (
+            <>
+              {primary ? (
+                <CredsBlock
+                  person={primary}
+                  sectionTitle={primaryIsMe ? "Ваши данные" : "Данные партнёра"}
+                  showPassword={showPasswords}
+                />
               ) : null}
-            </div>
-            <div className="mini-profile__identity-text">
-              <h3>{primary.displayName}</h3>
-              <p>
-                {avatarBusy && primaryIsMe
-                  ? "Сохраняем фото…"
-                  : primaryIsMe
-                    ? "Это вы"
-                    : "Партнёр"}
-              </p>
-            </div>
-          </section>
-        ) : (
-          <p className="muted">Загрузка…</p>
-        )}
 
-        {flames ? (
-          <section className="mini-profile__flames">
-            <div className="mini-profile__flame-head">
-              <div>
-                <p className="mini-profile__flame-count">{flames.streak}</p>
-                <p className="mini-profile__flame-label">{streakLabel(flames.streak)}</p>
-              </div>
-              <p className="mini-profile__flame-status">
-                {flames.sharedToday
-                  ? "Сегодня оба зажгли — день засчитан"
-                  : flames.meChecked
-                    ? "Ты уже зажёг(ла). Ждём партнёра"
-                    : flames.partnerChecked
-                      ? "Партнёр уже зажёг(ла). Твой ход"
-                      : "Нажми огонёк — раз в день оба зажигаете серию"}
-              </p>
-            </div>
+              {secondary ? (
+                <CredsBlock
+                  person={secondary}
+                  sectionTitle={
+                    me && secondary.id === me.id ? "Ваши данные" : "Данные партнёра"
+                  }
+                  showPassword={showPasswords}
+                />
+              ) : null}
 
-            <button
-              type="button"
-              className={[
-                "mini-profile__flame-btn",
-                `is-${mainTone}`,
-                igniting ? "is-igniting" : "",
-                flames.meChecked ? "is-done" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              disabled={flameBusy || flames.meChecked}
-              aria-label={
-                flames.meChecked
-                  ? "Огонёк на сегодня уже зажжён"
-                  : flameBusy
-                    ? "Зажигаем…"
-                    : "Зажечь огонёк"
-              }
-              onClick={() => void checkInFlame()}
-            >
-              <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--main" />
-              <span className="mini-profile__flame-btn-hint">
-                {flames.meChecked
-                  ? flames.sharedToday
-                    ? "Горит вместе"
-                    : "Зажжено"
-                  : flameBusy
-                    ? "…"
-                    : "Зажечь"}
-              </span>
-            </button>
-
-            <div className="mini-profile__flame-sides" aria-label="Статус огоньков пары">
-              <div className={`mini-profile__flame-side${flames.meChecked ? " is-on" : ""}`}>
-                <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--side" />
-                <span>Вы</span>
-              </div>
-              <div className={`mini-profile__flame-side${flames.partnerChecked ? " is-on" : ""}`}>
-                <FlameIcon className="mini-profile__flame-svg mini-profile__flame-svg--side" />
-                <span>Партнёр</span>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {editing && me ? (
-          <form className="mini-profile__edit" onSubmit={onSave}>
-            <p className="mini-profile__section-title">Редактирование</p>
-            <p className="mini-profile__edit-hint muted">
-              {primaryIsMe
-                ? "Фото меняется по нажатию на аватар сверху"
-                : "Своё фото можно сменить в своём профиле (аватар сверху — партнёр)"}
-            </p>
-            <div className="field">
-              <label htmlFor="mini-name">Имя</label>
-              <input
-                id="mini-name"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                maxLength={40}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="mini-pass">Новый пароль (необязательно)</label>
-              <input
-                id="mini-pass"
-                type="password"
-                value={passwordDraft}
-                onChange={(e) => setPasswordDraft(e.target.value)}
-                minLength={6}
-                autoComplete="new-password"
-                placeholder="Минимум 6 символов"
-              />
-            </div>
-            <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? "Сохраняем…" : "Сохранить"}
-            </button>
-          </form>
-        ) : (
-          <>
-            {primary ? (
-              <CredsBlock
-                person={primary}
-                sectionTitle={primaryIsMe ? "Ваши данные" : "Данные партнёра"}
-                showPassword={showPasswords}
-              />
-            ) : null}
-
-            {secondary ? (
-              <CredsBlock
-                person={secondary}
-                sectionTitle={
-                  me && secondary.id === me.id ? "Ваши данные" : "Данные партнёра"
-                }
-                showPassword={showPasswords}
-              />
-            ) : null}
-
-            <button
-              type="button"
-              className="mini-profile__toggle-pass"
-              onClick={() => setShowPasswords((v) => !v)}
-            >
-              {showPasswords ? "Скрыть пароли" : "Показать пароли"}
-            </button>
-          </>
-        )}
+              <button
+                type="button"
+                className="mini-profile__toggle-pass"
+                onClick={() => setShowPasswords((v) => !v)}
+              >
+                {showPasswords ? "Скрыть пароли" : "Показать пароли"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
 

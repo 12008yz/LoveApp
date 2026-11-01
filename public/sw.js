@@ -1,4 +1,4 @@
-const CACHE = "loveapp-v5";
+const CACHE = "loveapp-v6";
 const ASSETS = [
   "/manifest.webmanifest",
   "/icons/icon-192.png",
@@ -76,6 +76,30 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+function isChatPath(pathname) {
+  return pathname === "/chat" || pathname.startsWith("/chat/");
+}
+
+/** Skip chat pushes when a visible tab is already on /chat. */
+async function shouldSuppressPush(data) {
+  const target = String(data?.url || "");
+  if (!target.includes("/chat")) return false;
+  const windowClients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of windowClients) {
+    if (client.visibilityState !== "visible") continue;
+    try {
+      const path = new URL(client.url).pathname;
+      if (isChatPath(path)) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
 self.addEventListener("push", (event) => {
   let data = { title: "LoveApp", body: "Новое уведомление", url: "/home" };
   try {
@@ -84,12 +108,15 @@ self.addEventListener("push", (event) => {
     /* ignore */
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "LoveApp", {
-      body: data.body || "",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      data: { url: data.url || "/home" },
-    }),
+    (async () => {
+      if (await shouldSuppressPush(data)) return;
+      await self.registration.showNotification(data.title || "LoveApp", {
+        body: data.body || "",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        data: { url: data.url || "/home" },
+      });
+    })(),
   );
 });
 

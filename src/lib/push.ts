@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { isOnline } from "@/lib/chat-presence";
 import { prisma } from "@/lib/prisma";
 
 function configured() {
@@ -27,7 +28,7 @@ export type PushPayload = {
 
 export type SendPushResult = {
   sent: number;
-  reason?: "not_configured" | "no_subscriptions" | "all_failed" | "ok";
+  reason?: "not_configured" | "no_subscriptions" | "all_failed" | "ok" | "partner_in_chat";
   lastError?: string;
 };
 
@@ -71,10 +72,15 @@ export async function notifyPartner(
   coupleId: string,
   authorId: string,
   payload: PushPayload,
-) {
+): Promise<SendPushResult> {
   const partner = await prisma.coupleMember.findFirst({
     where: { coupleId, userId: { not: authorId } },
+    include: { user: { select: { lastSeenAt: true } } },
   });
   if (!partner) return { sent: 0 };
+  // Presence heartbeats only run while the partner is on /chat — skip push then.
+  if (isOnline(partner.user.lastSeenAt)) {
+    return { sent: 0, reason: "partner_in_chat" };
+  }
   return sendPushToUser(partner.userId, payload);
 }
