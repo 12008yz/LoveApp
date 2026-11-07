@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ListSkeleton, listEnterStyle } from "@/components/list-motion";
 import { usePresence } from "@/hooks/use-presence";
+import { DiaryPierce } from "./diary-pierce";
 
 type Entry = {
   id: string;
@@ -227,8 +228,11 @@ export function DiaryClient() {
 
   const shownRole = shownEntry?.author.genderRole === "girl" ? "girl" : "boy";
 
+  const empty = ready && entries.length === 0;
+
   return (
     <div className="diary">
+      <DiaryPierce snapBack={empty} />
       <div className="diary__toolbar">
         {!composeOpen ? (
           <button

@@ -3007,8 +3007,11 @@ select {
   isolation: isolate;
   margin: -1rem -1rem -1.25rem;
   padding: 1rem 1rem 1.25rem;
-  /* Fill the content column above the nav (no short -2rem gap). */
-  min-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
+  /*
+   * Always leave scroll runway so the pierce miniature can play
+   * (wheel, trackpad, DevTools device mode, real phone) even with few entries.
+   */
+  min-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom) + 80vh);
   background: transparent;
 }
 
@@ -3042,64 +3045,65 @@ select {
 .diary-page__content {
   position: relative;
   z-index: 1;
+  /* Leave room so the last cards clear the pierce miniature. */
+  padding-bottom: 4.75rem;
 }
 
 .diary-pierce {
   --pierce: 0;
   position: fixed;
-  inset: 0;
-  /* Below diary content (z-index 1) and bottom nav (30); above page wash. */
-  z-index: 0;
+  left: 50%;
+  /* Sit just above the bottom nav, over the diary list. */
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.35rem);
+  z-index: 25;
+  width: 8.25rem;
+  height: 4.25rem;
+  transform: translateX(-50%);
   pointer-events: none;
-  overflow: hidden;
-  /* Don't paint over the bottom nav region. */
-  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  overflow: visible;
 }
 
 .diary-pierce__glow {
   position: absolute;
-  left: 50%;
-  top: 42%;
-  width: min(72vw, 340px);
-  height: min(72vw, 340px);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
+  inset: -18% -8%;
+  border-radius: 999px;
   background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--rose-soft) 70%, transparent) 0%,
-    transparent 70%
+    70% 80% at 70% 50%,
+    color-mix(in srgb, var(--surface) 90%, transparent) 0%,
+    color-mix(in srgb, var(--rose-soft) 42%, transparent) 48%,
+    transparent 75%
   );
-  opacity: calc(0.35 + var(--pierce) * 0.35);
-  filter: blur(8px);
+  opacity: calc(0.55 + var(--pierce) * 0.25);
+  filter: blur(2px);
 }
 
 .diary-pierce__heart,
 .diary-pierce__arrow {
   position: absolute;
-  left: 50%;
-  top: 42%;
+  top: 50%;
   margin: 0;
   display: block;
 }
 
 .diary-pierce__heart {
-  width: min(56vw, 260px);
-  transform: translate(-50%, -50%) scale(calc(0.94 + var(--pierce) * 0.1));
-  opacity: calc(0.26 + var(--pierce) * 0.14);
-  filter: drop-shadow(0 18px 40px color-mix(in srgb, var(--rose-deep) 18%, transparent));
+  /* Heart sits on the right; arrow approaches from the left. */
+  left: 74%;
+  width: 2.75rem;
+  transform: translate(-50%, -50%) scale(calc(0.96 + var(--pierce) * 0.08));
+  opacity: calc(0.9 + var(--pierce) * 0.08);
+  filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--rose-deep) 28%, transparent));
   will-change: transform, opacity;
 }
 
 .diary-pierce__arrow {
-  width: min(76vw, 340px);
-  /* Arrow art points upper-right; travel along that diagonal through the heart. */
+  left: 36%;
+  width: 5.1rem;
+  /* Slide left → right through the heart; flatten diagonal art horizontally. */
   transform: translate(-50%, -50%)
-    translate(
-      calc(-48% + var(--pierce) * 96%),
-      calc(48% - var(--pierce) * 96%)
-    );
-  opacity: calc(0.34 + var(--pierce) * 0.2);
-  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--wood) 16%, transparent));
+    translateX(calc(-58% + var(--pierce) * 116%))
+    rotate(45deg);
+  opacity: calc(0.92 + var(--pierce) * 0.08);
+  filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--wood) 22%, transparent));
   will-change: transform, opacity;
 }
 
