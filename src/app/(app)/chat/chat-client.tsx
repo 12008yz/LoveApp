@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { CHAT_REACTIONS } from "@/lib/constants";
 import {
@@ -194,15 +195,6 @@ function AttachIcon() {
   );
 }
 
-function ProfileIcon() {
-  return (
-    <ChatSvgIcon>
-      <circle cx="12" cy="8" r="3.2" />
-      <path d="M5.5 19.2c1.4-3 3.5-4.4 6.5-4.4s5.1 1.4 6.5 4.4" />
-    </ChatSvgIcon>
-  );
-}
-
 function CloseIcon() {
   return (
     <ChatSvgIcon>
@@ -246,6 +238,22 @@ function SearchIcon() {
     <ChatSvgIcon>
       <circle cx="11" cy="11" r="6.5" />
       <path d="m16 16 3.5 3.5" />
+    </ChatSvgIcon>
+  );
+}
+
+function BackIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M15 5 8 12l7 7" />
+    </ChatSvgIcon>
+  );
+}
+
+function JumpDownIcon() {
+  return (
+    <ChatSvgIcon>
+      <path d="M6 9.5 12 15.5 18 9.5" />
     </ChatSvgIcon>
   );
 }
@@ -423,6 +431,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
   const [mediaViewerShown, setMediaViewerShown] = useState<MediaViewerState | null>(null);
   const [miniProfileOpen, setMiniProfileOpen] = useState(false);
   const [miniFocusId, setMiniFocusId] = useState<string | null>(null);
+  const [showJumpDown, setShowJumpDown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stickersPresence = usePresence(stickersOpen, 380);
   const profilePresence = usePresence(profileOpen);
@@ -480,6 +489,7 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
+    setShowJumpDown(false);
   }
 
   /** Soft pin after layout (reactions / keyboard) without fighting mid-history scroll. */
@@ -1372,23 +1382,25 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
     <div className={stickersPresence.mounted ? "chat-page is-stickers-open" : "chat-page"}>
       {partnerView ? (
         <header className="chat-header">
-          <UserAvatar
-            name={partnerView.displayName}
-            src={partnerView.avatarPath}
-            size="md"
-            onClick={() => openMiniProfile(partnerView.id)}
-          />
+          <Link href="/home" className="chat-header__round" aria-label="Назад" scroll={false}>
+            <BackIcon />
+          </Link>
           <button
             type="button"
-            className="chat-header__meta chat-header__meta-btn"
+            className="chat-header__pill"
             onClick={() => openMiniProfile(partnerView.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setSearchOpen((v) => !v);
+              setStickersOpen(false);
+            }}
           >
             <strong>{partnerView.displayName}</strong>
             <span className="chat-header__status">{subtitle}</span>
           </button>
           <button
             type="button"
-            className={searchOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
+            className={searchOpen ? "chat-header__round is-active" : "chat-header__round"}
             aria-label="Поиск"
             onClick={() => {
               setSearchOpen((v) => !v);
@@ -1398,14 +1410,12 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
           >
             <SearchIcon />
           </button>
-          <button
-            type="button"
-            className={miniProfileOpen ? "chat-icon-btn is-active" : "chat-icon-btn"}
-            aria-label="Ваш профиль"
-            onClick={() => openMiniProfile(me)}
-          >
-            <ProfileIcon />
-          </button>
+          <UserAvatar
+            name={partnerView.displayName}
+            src={partnerView.avatarPath}
+            size="md"
+            onClick={() => openMiniProfile(partnerView.id)}
+          />
         </header>
       ) : null}
 
@@ -1476,7 +1486,9 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
         onScroll={() => {
           const el = logRef.current;
           if (!el) return;
-          stickToBottom.current = isNearBottom(el);
+          const near = isNearBottom(el);
+          stickToBottom.current = near;
+          setShowJumpDown(!near);
         }}
       >
         {chatReady && messages.length === 0 ? (
@@ -2020,26 +2032,26 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
 
       {error ? <p className="chat-error">{error}</p> : null}
 
-      <form className="chat-composer" onSubmit={send}>
-        <div className="chat-composer__field">
+      <div className="chat-composer-stack">
+        {showJumpDown ? (
           <button
             type="button"
-            className={
-              stickersOpen ? "chat-composer__embed-btn is-active" : "chat-composer__embed-btn"
-            }
-            aria-label="Стикеры"
-            aria-pressed={stickersOpen}
+            className="chat-jump"
+            aria-label="Вниз"
             onClick={() => {
-              setStickersOpen((v) => !v);
-              setSearchOpen(false);
-              if (profileOpen) closeProfile();
+              stickToBottom.current = true;
+              setShowJumpDown(false);
+              scrollLogToBottom();
             }}
           >
-            <StickerIcon />
+            <JumpDownIcon />
           </button>
+        ) : null}
+
+        <form className="chat-composer" onSubmit={send}>
           <button
             type="button"
-            className="chat-composer__embed-btn"
+            className="chat-composer__attach"
             aria-label="Фото или видео"
             disabled={Boolean(editingId)}
             onClick={() => {
@@ -2057,40 +2069,57 @@ export function ChatClient({ partner }: { partner: Partner | null }) {
             className="sr-only"
             onChange={(e) => onPickMedia(e.target.files)}
           />
-          <textarea
-            ref={textareaRef}
-            className="chat-composer__input"
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              if (e.target.value.trim()) scheduleTyping();
-            }}
-            onKeyDown={onComposerKey}
-            placeholder={
-              editingId
-                ? "Изменить сообщение…"
-                : pendingMedia.length
-                  ? "Подпись (необязательно)"
-                  : "Сообщение"
-            }
-            maxLength={4000}
-            rows={1}
-            enterKeyHint="send"
-            autoComplete="off"
-          />
-        </div>
-        <button
-          type="submit"
-          className="chat-send"
-          disabled={sending || (!text.trim() && !pendingMedia.length)}
-          aria-label="Отправить"
-          // Keep focus on textarea (desktop). Touch uses keepComposerFocused after send —
-          // avoid preventDefault on pointerdown (it can cancel the submit click).
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <SendIcon />
-        </button>
-      </form>
+          <div className="chat-composer__field">
+            <button
+              type="button"
+              className={
+                stickersOpen ? "chat-composer__embed-btn is-active" : "chat-composer__embed-btn"
+              }
+              aria-label="Стикеры"
+              aria-pressed={stickersOpen}
+              onClick={() => {
+                setStickersOpen((v) => !v);
+                setSearchOpen(false);
+                if (profileOpen) closeProfile();
+              }}
+            >
+              <StickerIcon />
+            </button>
+            <textarea
+              ref={textareaRef}
+              className="chat-composer__input"
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (e.target.value.trim()) scheduleTyping();
+              }}
+              onKeyDown={onComposerKey}
+              placeholder={
+                editingId
+                  ? "Изменить сообщение…"
+                  : pendingMedia.length
+                    ? "Подпись (необязательно)"
+                    : "Сообщение"
+              }
+              maxLength={4000}
+              rows={1}
+              enterKeyHint="send"
+              autoComplete="off"
+            />
+          </div>
+          <button
+            type="submit"
+            className="chat-send"
+            disabled={sending || (!text.trim() && !pendingMedia.length)}
+            aria-label="Отправить"
+            // Keep focus on textarea (desktop). Touch uses keepComposerFocused after send —
+            // avoid preventDefault on pointerdown (it can cancel the submit click).
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <SendIcon />
+          </button>
+        </form>
+      </div>
 
       {portalReady && mediaShown
         ? createPortal(
