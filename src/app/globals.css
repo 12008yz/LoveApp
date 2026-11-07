@@ -580,10 +580,10 @@ select {
   height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
   max-height: calc(100dvh - var(--bottom-nav-h) - var(--safe-bottom));
   background-color: var(--paper);
-  background-image: url("/art/wallpaper-chat-tile.jpg?v=8");
+  background-image: url("/art/wallpaper-chat-tile.jpg?v=9");
   background-image: image-set(
-    url("/art/wallpaper-chat-tile.webp?v=8") type("image/webp"),
-    url("/art/wallpaper-chat-tile.jpg?v=8") type("image/jpeg")
+    url("/art/wallpaper-chat-tile.webp?v=9") type("image/webp"),
+    url("/art/wallpaper-chat-tile.jpg?v=9") type("image/jpeg")
   );
   background-size: 360px auto;
   background-repeat: repeat;
