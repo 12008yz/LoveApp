@@ -205,7 +205,7 @@ export function DiaryClient() {
 
   async function remove(id: string) {
     if (deleting) return;
-    if (!confirm("Удалить эту запись?")) return;
+    if (!confirm("Удалить это воспоминание?")) return;
     setDeleting(true);
     setError("");
     try {
@@ -234,19 +234,20 @@ export function DiaryClient() {
           <button
             type="button"
             className="diary__new"
+            aria-label="Новое воспоминание"
             onClick={() => {
               setComposeOpen(true);
               setError("");
             }}
           >
-            Новая запись
+            + Новая
           </button>
         ) : null}
       </div>
 
       {composeOpen ? (
         <form className="diary-compose" onSubmit={onSubmit}>
-          <p className="diary-compose__eyebrow">Новый лист</p>
+          <p className="diary-compose__eyebrow">Новое воспоминание</p>
           {error ? <p className="error-text">{error}</p> : null}
           <div className="field">
             <label htmlFor="title">Тема</label>
@@ -260,7 +261,7 @@ export function DiaryClient() {
             />
           </div>
           <div className="field">
-            <label htmlFor="body">Запись</label>
+            <label htmlFor="body">Текст</label>
             <textarea
               id="body"
               name="body"
@@ -288,51 +289,60 @@ export function DiaryClient() {
         </form>
       ) : null}
 
-      <div className="diary-journal">
+      <div className="diary-journal diary-timeline">
         {!ready ? <ListSkeleton rows={4} tall /> : null}
         {ready && entries.length === 0 && !composeOpen ? (
-          <p className="diary-empty">Пока пусто — откройте новый лист и напишите первое.</p>
+          <p className="diary-empty">
+            Пока пусто — добавьте первое воспоминание в ленту.
+          </p>
         ) : null}
 
         {ready
           ? days.map((day) => (
               <section key={day.key} className="diary-day">
-                <h2 className="diary-day__label">{day.label}</h2>
-                <div className="diary-day__list">
-                  {day.entries.map((entry, ei) => {
-                    const role = entry.author.genderRole === "girl" ? "girl" : "boy";
-                    const preview = previewText(entry.body);
-                    return (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        className={
-                          role === "girl"
-                            ? "diary-leaf diary-leaf--girl list-enter"
-                            : "diary-leaf diary-leaf--boy list-enter"
-                        }
-                        style={listEnterStyle(ei)}
-                        aria-label={`Открыть запись: ${entry.title}`}
-                        onClick={() => {
-                          setError("");
-                          setSelectedId(entry.id);
-                        }}
-                      >
-                        <span className="diary-leaf__main">
-                          <span className="diary-leaf__title">{entry.title}</span>
-                          <span className="diary-leaf__meta">
-                            <span className="diary-leaf__author">{entry.author.displayName}</span>
-                            <span aria-hidden>·</span>
-                            <span>{formatTime(entry.createdAt)}</span>
+                <div className="diary-day__rail" aria-hidden>
+                  <span className="diary-day__dot" />
+                </div>
+                <div className="diary-day__content">
+                  <h2 className="diary-day__label">{day.label}</h2>
+                  <div className="diary-day__list">
+                    {day.entries.map((entry, ei) => {
+                      const role = entry.author.genderRole === "girl" ? "girl" : "boy";
+                      const preview = previewText(entry.body);
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className={
+                            role === "girl"
+                              ? "diary-leaf diary-leaf--girl list-enter"
+                              : "diary-leaf diary-leaf--boy list-enter"
+                          }
+                          style={listEnterStyle(ei)}
+                          aria-label={`Открыть воспоминание: ${entry.title}`}
+                          onClick={() => {
+                            setError("");
+                            setSelectedId(entry.id);
+                          }}
+                        >
+                          <span className="diary-leaf__main">
+                            <span className="diary-leaf__title">{entry.title}</span>
+                            <span className="diary-leaf__meta">
+                              <span className="diary-leaf__author">{entry.author.displayName}</span>
+                              <span aria-hidden>·</span>
+                              <span>{formatTime(entry.createdAt)}</span>
+                            </span>
+                            {preview ? (
+                              <span className="diary-leaf__preview">{preview}</span>
+                            ) : null}
                           </span>
-                          {preview ? <span className="diary-leaf__preview">{preview}</span> : null}
-                        </span>
-                        <span className="diary-leaf__chevron" aria-hidden>
-                          <OpenChevron />
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <span className="diary-leaf__chevron" aria-hidden>
+                            <OpenChevron />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </section>
             ))
@@ -369,7 +379,7 @@ export function DiaryClient() {
                   >
                     <BackChevron />
                   </button>
-                  <p className="diary-sheet__eyebrow">Запись</p>
+                  <p className="diary-sheet__eyebrow">Воспоминание</p>
                 </div>
 
                 <header className="diary-sheet__head">
